@@ -1,0 +1,35 @@
+server:
+  port: 8201
+
+spring:
+  application:
+    name: portal-auth
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.portal.auth.entity
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+portal:
+  jwt:
+    secret: portal-secret-key-portal-secret-key-portal-123456
+    expire: 7200000
+    token-prefix: "Bearer "
+    header: Authorization
+
+logging:
+  level:
+    com.portal.auth.mapper: debug

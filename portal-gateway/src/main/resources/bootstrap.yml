@@ -1,0 +1,61 @@
+server:
+  port: 8080
+
+spring:
+  application:
+    name: portal-gateway
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+      config:
+        server-addr: 127.0.0.1:8848
+        file-extension: yml
+        group: PORTAL_GROUP
+    gateway:
+      discovery:
+        locator:
+          enabled: false
+      # 路由不再硬编码, 由网关启动时从 gateway_route 表(及下方 yaml 兜底)动态加载
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.portal.gateway.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+portal:
+  jwt:
+    secret: portal-secret-key-portal-secret-key-portal-123456
+    expire: 7200000
+    token-prefix: "Bearer "
+    header: Authorization
+  gateway:
+    # ===== 路由管理（yaml 兜底，仅当 gateway_route 表无数据时使用）=====
+    # prefix  : 对外暴露的路径前缀（对应前端服务前缀常量）
+    # service-id : Nacos 注册的服务名（spring.application.name）
+    route-mappings:
+      - prefix: /portal-auth
+        service-id: portal-auth
+      - prefix: /users
+        service-id: portal-user
+      - prefix: /blogs
+        service-id: portal-blog
+      - prefix: /files
+        service-id: portal-file
+      # 网关自身管理接口: 请求 /gateway/route/** 由 portal-gateway 自己处理
+      # 注意 strip-prefix 必须为 false, 否则会剥离 /gateway 导致与 Controller 的 /gateway/route 不匹配
+      - prefix: /gateway
+        service-id: portal-gateway
+        strip-prefix: false

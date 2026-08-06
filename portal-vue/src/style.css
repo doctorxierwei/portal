@@ -1,0 +1,79 @@
+* { margin: 0; padding: 0; box-sizing: border-box; }
+html, body, #app { height: 100%; }
+
+/* ===== 主题变量：默认 bilibili 风格 ===== */
+:root,
+.theme-bili {
+  --el-color-primary: #fb7299;
+  --el-color-primary-light-3: #fc9bb8;
+  --el-color-primary-light-5: #fdbccf;
+  --el-color-primary-light-7: #fee1ec;
+  --el-color-primary-light-8: #fef0f5;
+  --el-color-primary-light-9: #fff6f9;
+  --el-color-primary-dark-2: #e2557c;
+  --el-border-radius-base: 8px;
+  --el-border-radius-small: 6px;
+  --brand: #fb7299;
+  --brand-grad: linear-gradient(135deg, #fb7299 0%, #ff9a9e 100%);
+  --aside-bg: linear-gradient(180deg, #2b2b3a 0%, #1f1f2e 100%);
+  --layout-bg: #f5f6f7;
+}
+
+/* TDesign 风格（腾讯蓝绿） */
+.theme-tdesign {
+  --el-color-primary: #0052d9;
+  --el-color-primary-light-3: #4b86e8;
+  --el-color-primary-light-5: #99b4ed;
+  --el-color-primary-light-7: #ccdafa;
+  --el-color-primary-light-8: #e6eefb;
+  --el-color-primary-light-9: #f2f6fd;
+  --el-color-primary-dark-2: #0046b8;
+  --el-border-radius-base: 6px;
+  --el-border-radius-small: 4px;
+  --brand: #0052d9;
+  --brand-grad: linear-gradient(135deg, #0052d9 0%, #0594fa 100%);
+  --aside-bg: linear-gradient(180deg, #1c2b3a 0%, #122033 100%);
+  --layout-bg: #f3f4f6;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  color: #303133;
+}
+
+/* 内容区统一留白 */
+.el-main { padding: 16px; background: var(--layout-bg); }
+
+/* 卡片圆角 + 轻阴影 */
+.el-card {
+  border: none !important;
+  border-radius: 12px !important;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.06) !important;
+}
+
+/* 表格视觉优化 */
+.el-table th.el-table__cell { background: #fafafa !important; color: #606266; font-weight: 600; }
+.el-table { border-radius: 10px; overflow: hidden; }
+
+/* 实心主按钮渐变（bilibili 风），plain/小尺寸按钮保持默认轻量样式 */
+.theme-bili .el-button--primary:not(.is-plain):not(.is-link):not(.is-text) {
+  background: var(--brand-grad);
+  border: none;
+  box-shadow: 0 4px 12px rgba(251, 114, 153, 0.35);
+}
+
+/* 表格操作按钮统一更柔和 */
+.el-button.is-plain { font-weight: 500; }
+.el-button--small.is-plain { padding: 5px 10px; }
+
+/* 链接/文字按钮颜色更协调 */
+.el-button.is-text { color: #606266; }
+.el-button.is-text:hover { color: var(--el-color-primary); }
+
+/* 分页选中态也用品牌色 */
+.el-pagination.is-background .el-pager li.is-active { background: var(--brand-grad) !important; }
+
+/* 滚动条美化 */
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-thumb { background: #c0c4cc; border-radius: 4px; }
+::-webkit-scrollbar-thumb:hover { background: #909399; }

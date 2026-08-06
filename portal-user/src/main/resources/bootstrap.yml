@@ -1,0 +1,43 @@
+server:
+  port: 8202
+
+spring:
+  application:
+    name: portal-user
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false
+    username: root
+    password: 123456
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+
+mybatis-plus:
+  mapper-locations: classpath*:mapper/*.xml
+  type-aliases-package: com.portal.user.entity
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+logging:
+  level:
+    com.portal.user.mapper: debug
+
+portal:
+  # 本地文件上传兜底目录 (minio.enabled=false 时使用)
+  upload-dir: ./upload
+  minio:
+    enabled: true
+    endpoint: http://127.0.0.1:9005
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: portal
+    # 访问前缀(可独立配置):
+    #   1) bucket 设为 public(匿名读) 时填 MinIO 直链(带 bucket): http://127.0.0.1:9005/portal
+    #   2) 走网关代理(不要求 public, 推荐) 时填: http://127.0.0.1:8080/portal-user/image/minio
+    #      (网关需放行 /portal-user/image/minio/** ; 后端 GET /image/minio/{name} 自动读取 bucket)
+    url-prefix: http://127.0.0.1:8080/portal-user/image/minio

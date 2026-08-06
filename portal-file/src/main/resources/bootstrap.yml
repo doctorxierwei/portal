@@ -1,0 +1,45 @@
+spring:
+  application:
+    name: portal-file
+  cloud:
+    nacos:
+      discovery:
+        server-addr: 127.0.0.1:8848
+        username: nacos
+        password: nacos
+      config:
+        server-addr: 127.0.0.1:8848
+        username: nacos
+        password: nacos
+        file-extension: yml
+
+server:
+  port: 8220
+
+---
+spring:
+  config:
+    activate:
+      on-profile: dev
+  datasource:
+    url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+    username: root
+    password: 123456
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.portal.file.entity
+  configuration:
+    map-underscore-to-camel-case: true
+
+portal:
+  upload-dir: ./upload
+  minio:
+    enabled: true
+    endpoint: http://127.0.0.1:9005
+    access-key: minioadmin
+    secret-key: minioadmin
+    bucket: portal
+    # 图片回显统一走网关: /files 路由 -> portal-file 服务的 /image/minio
+    url-prefix: http://127.0.0.1:8080/files/image/minio

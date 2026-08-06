@@ -1,0 +1,41 @@
+# ========== 操作系统 / 编辑器 ==========
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+.idea/
+*.iml
+.vscode/
+!.vscode/extensions.json
+
+# ========== Java / Maven ==========
+target/
+*.class
+*.jar
+*.war
+*.ear
+*.log
+logs/
+*.pid
+
+# ========== Node / Vite (portal-vue) ==========
+portal-vue/node_modules/
+portal-vue/dist/
+portal-vue/.vite/
+portal-vue/.eslintcache
+portal-vue/npm-debug.log*
+portal-vue/yarn-debug.log*
+portal-vue/yarn-error.log*
+portal-vue/package-lock.json
+portal-vue/yarn.lock
+
+# ========== 环境变量 / 密钥 ==========
+.env
+.env.local
+.env.*.local
+*.key
+*.pem
+
+# ========== 运行时产物 ==========
+upload/
+*.tmp
