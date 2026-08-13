@@ -44,4 +44,15 @@ public class BlogImageServiceImpl extends ServiceImpl<BlogImageMapper, BlogImage
     public BlogImage getById(Long id) {
         return super.getById(id);
     }
+
+    @Override
+    public BlogImage getByMd5(String md5) {
+        if (md5 == null || md5.isEmpty()) {
+            return null;
+        }
+        QueryWrapper<BlogImage> qw = new QueryWrapper<>();
+        qw.eq("md5", md5);
+        qw.last("LIMIT 1");
+        return getOne(qw);
+    }
 }

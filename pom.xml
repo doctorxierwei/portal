@@ -18,6 +18,7 @@
         <module>portal-user</module>
         <module>portal-blog</module>
         <module>portal-file</module>
+        <module>portal-mes</module>
     </modules>
 
     <parent>
@@ -60,6 +61,11 @@
             <dependency>
                 <groupId>com.portal</groupId>
                 <artifactId>portal-common</artifactId>
+                <version>${project.version}</version>
+            </dependency>
+            <dependency>
+                <groupId>com.portal</groupId>
+                <artifactId>portal-mes</artifactId>
                 <version>${project.version}</version>
             </dependency>
 

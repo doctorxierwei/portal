@@ -15,7 +15,9 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
 
 import javax.annotation.Resource;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 
 /**
@@ -47,6 +49,16 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
             if (count(qw) > 0) {
                 throw new BizException("用户名已存在");
             }
+            if (StringUtils.hasText(user.getEmail())) {
+                QueryWrapper<SysUser> eq = new QueryWrapper<>();
+                eq.eq("email", user.getEmail());
+                if (count(eq) > 0) throw new BizException("邮箱已被使用");
+            }
+            if (StringUtils.hasText(user.getPhone())) {
+                QueryWrapper<SysUser> eq = new QueryWrapper<>();
+                eq.eq("phone", user.getPhone());
+                if (count(eq) > 0) throw new BizException("手机号已被使用");
+            }
             user.setPassword(encoder.encode(user.getPassword()));
             user.setStatus(user.getStatus() == null ? 1 : user.getStatus());
             user.setCreateTime(java.time.LocalDateTime.now());
@@ -59,7 +71,20 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
             if (StringUtils.hasText(user.getPassword())) {
                 exist.setPassword(encoder.encode(user.getPassword()));
             }
+            if (StringUtils.hasText(user.getEmail())) {
+                QueryWrapper<SysUser> eq = new QueryWrapper<>();
+                eq.eq("email", user.getEmail()).ne("id", user.getId());
+                if (count(eq) > 0) throw new BizException("邮箱已被使用");
+            }
+            if (StringUtils.hasText(user.getPhone())) {
+                QueryWrapper<SysUser> eq = new QueryWrapper<>();
+                eq.eq("phone", user.getPhone()).ne("id", user.getId());
+                if (count(eq) > 0) throw new BizException("手机号已被使用");
+            }
             exist.setNickname(user.getNickname());
+            exist.setEmail(user.getEmail());
+            exist.setPhone(user.getPhone());
+            exist.setAvatar(user.getAvatar());
             exist.setStatus(user.getStatus());
             exist.setUpdateTime(java.time.LocalDateTime.now());
             updateById(exist);
@@ -85,5 +110,26 @@ public class UserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impleme
             ur.setRoleId(roleId);
             userRoleMapper.insert(ur);
         }
+    }
+
+    @Override
+    public Map<String, Object> currentUserInfo(Long userId) {
+        SysUser user = this.getById(userId);
+        Map<String, Object> info = new HashMap<>(16);
+        if (user == null) {
+            info.put("userId", userId);
+            return info;
+        }
+        List<String> roles = userRoleMapper.selectRoleCodesByUserId(userId);
+        info.put("userId", user.getId());
+        info.put("username", user.getUsername());
+        info.put("nickname", user.getNickname());
+        info.put("email", user.getEmail());
+        info.put("phone", user.getPhone());
+        info.put("avatar", user.getAvatar());
+        info.put("status", user.getStatus());
+        info.put("createTime", user.getCreateTime());
+        info.put("roles", roles);
+        return info;
     }
 }

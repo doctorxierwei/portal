@@ -11,6 +11,26 @@
         LIMIT 1
     </select>
 
+    <!-- 按 用户名 / 邮箱 / 手机号 任一登录 -->
+    <select id="selectByAccount" resultType="com.portal.auth.entity.SysUser">
+        SELECT *
+        FROM sys_user
+        WHERE username = #{account}
+           OR email = #{account}
+           OR phone = #{account}
+        LIMIT 1
+    </select>
+
+    <!-- 按邮箱查询 -->
+    <select id="selectByEmail" resultType="com.portal.auth.entity.SysUser">
+        SELECT * FROM sys_user WHERE email = #{email} LIMIT 1
+    </select>
+
+    <!-- 按手机号查询 -->
+    <select id="selectByPhone" resultType="com.portal.auth.entity.SysUser">
+        SELECT * FROM sys_user WHERE phone = #{phone} LIMIT 1
+    </select>
+
     <!-- 按用户ID查询角色编码 -->
     <select id="selectRoleCodesByUserId" resultType="java.lang.String">
         SELECT r.code

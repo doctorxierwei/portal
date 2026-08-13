@@ -13,7 +13,14 @@ const routes = [
     name: 'Root',
     component: () => import('../layout/MainLayout.vue'),
     redirect: '/dashboard',
-    children: []
+    children: [
+      {
+        path: 'profile',
+        name: 'Profile',
+        component: () => import('../views/Profile.vue'),
+        meta: { title: '个人中心' }
+      }
+    ]
   },
   {
     path: '/blog-list',
@@ -47,6 +54,9 @@ const componentMap = {
   'blog/tag': () => import('../views/blog/TagManage.vue'),
   'blog/image': () => import('../views/blog/ImageManage.vue'),
   'blog/comment': () => import('../views/blog/CommentManage.vue'),
+  'mes/area': () => import('../views/mes/AreaManage.vue'),
+  'mes/org': () => import('../views/mes/OrgManage.vue'),
+  'mes/device': () => import('../views/mes/DeviceManage.vue'),
   'external': () => import('../views/ExternalPage.vue')
 }
 
@@ -55,6 +65,8 @@ let dynamicRouteNames = []
 
 // 标记菜单是否已为「无匹配」兜底刷新过一次(避免无限重定向)
 let menuRetried = false
+// 标记菜单是否已经拉取过(区分"从未加载"与"加载后为空"), 防止空菜单导致无限循环
+let menuLoaded = false
 
 function buildRoutes(menus) {
   const result = []
@@ -122,6 +134,7 @@ export async function refreshUserMenus() {
   const userStore = useUserStore()
   const { getMenuTreeByRoles } = await import('../api/index.js')
   const menus = await getMenuTreeByRoles(userStore.roles)
+  menuLoaded = true   // 标记已加载过(即使结果为空也不再重复请求)
   removeDynamicRoutes()
   userStore.setMenus(menus)
   const dynamic = buildRoutes(menus)
@@ -151,7 +164,7 @@ router.beforeEach(async (to, from, next) => {
   }
 
   // 菜单尚未加载: 拉取菜单树并注册动态路由, 注册完成后再解析目标路径
-  if (userStore.menus.length === 0) {
+  if (!menuLoaded && userStore.menus.length === 0) {
     try {
       await refreshUserMenus()
     } catch (e) {

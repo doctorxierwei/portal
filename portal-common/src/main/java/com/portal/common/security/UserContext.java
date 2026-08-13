@@ -11,19 +11,24 @@ import javax.servlet.http.HttpServletRequest;
 public class UserContext {
 
     public static Long currentUserId() {
+        // 优先网关透传头, 否则直接解析前端传入的 token (通用兜底)
         String val = header("X-User-Id");
-        if (val == null || val.isEmpty() || "null".equals(val)) {
-            return null;
+        if (val != null && !val.isEmpty() && !"null".equals(val)) {
+            try {
+                return Long.valueOf(val);
+            } catch (NumberFormatException e) {
+                // 继续走 token 解析
+            }
         }
-        try {
-            return Long.valueOf(val);
-        } catch (NumberFormatException e) {
-            return null;
-        }
+        return TokenUserResolver.parseTokenUserId(currentRequest());
     }
 
     public static String currentUsername() {
-        return header("X-User-Name");
+        String val = header("X-User-Name");
+        if (val != null && !val.isEmpty()) {
+            return val;
+        }
+        return TokenUserResolver.parseTokenUsername(currentRequest());
     }
 
     public static String currentRoles() {
@@ -43,5 +48,10 @@ public class UserContext {
         }
         HttpServletRequest request = attrs.getRequest();
         return request.getHeader(name);
+    }
+
+    private static HttpServletRequest currentRequest() {
+        ServletRequestAttributes attrs = (ServletRequestAttributes) RequestContextHolder.getRequestAttributes();
+        return attrs == null ? null : attrs.getRequest();
     }
 }

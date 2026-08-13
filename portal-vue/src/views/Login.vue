@@ -4,7 +4,7 @@
       <h2 class="title">门户网站登录</h2>
       <el-form :model="form" :rules="rules" ref="formRef" label-width="0">
         <el-form-item prop="username">
-          <el-input v-model="form.username" placeholder="用户名" :prefix-icon="User" />
+          <el-input v-model="form.username" placeholder="用户名 / 邮箱 / 手机号" :prefix-icon="User" />
         </el-form-item>
         <el-form-item prop="password">
           <el-input v-model="form.password" type="password" placeholder="密码"
@@ -30,6 +30,12 @@
         <el-form-item prop="nickname">
           <el-input v-model="regForm.nickname" placeholder="昵称(可选)" :prefix-icon="User" />
         </el-form-item>
+        <el-form-item prop="email">
+          <el-input v-model="regForm.email" placeholder="邮箱(可选)" :prefix-icon="Message" />
+        </el-form-item>
+        <el-form-item prop="phone">
+          <el-input v-model="regForm.phone" placeholder="手机号(可选)" :prefix-icon="Iphone" />
+        </el-form-item>
         <el-form-item prop="password">
           <el-input v-model="regForm.password" type="password" placeholder="密码(至少6位)"
                     :prefix-icon="Lock" @keyup.enter="onRegister" />
@@ -46,7 +52,7 @@
 <script setup>
 import { ref, reactive } from 'vue'
 import { useRouter } from 'vue-router'
-import { User, Lock } from '@element-plus/icons-vue'
+import { User, Lock, Message, Iphone } from '@element-plus/icons-vue'
 import { ElMessage } from 'element-plus'
 import { login, register } from '../api/index.js'
 import { useUserStore } from '../stores/user'
@@ -57,7 +63,7 @@ const formRef = ref()
 const loading = ref(false)
 const form = reactive({ username: 'admin', password: '123456' })
 const rules = {
-  username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  username: [{ required: true, message: '请输入用户名/邮箱/手机号', trigger: 'blur' }],
   password: [{ required: true, message: '请输入密码', trigger: 'blur' }]
 }
 
@@ -71,6 +77,9 @@ async function onSubmit() {
       id: data.id,
       username: data.username,
       nickname: data.nickname,
+      email: data.email,
+      phone: data.phone,
+      avatar: data.avatar,
       roles: data.roles
     })
     ElMessage.success(`欢迎回来，${data.nickname || data.username}`)
@@ -84,9 +93,11 @@ async function onSubmit() {
 const regDialog = ref(false)
 const regRef = ref()
 const regLoading = ref(false)
-const regForm = reactive({ username: '', nickname: '', password: '' })
+const regForm = reactive({ username: '', nickname: '', email: '', phone: '', password: '' })
 const regRules = {
   username: [{ required: true, message: '请输入用户名', trigger: 'blur' }],
+  email: [{ type: 'email', message: '邮箱格式不正确', trigger: 'blur' }],
+  phone: [{ pattern: /^1[3-9]\d{9}$/, message: '手机号格式不正确', trigger: 'blur' }],
   password: [{ required: true, min: 6, message: '密码至少6位', trigger: 'blur' }]
 }
 function openReg() { regDialog.value = true }

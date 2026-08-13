@@ -50,4 +50,14 @@ public class UserController {
         userService.assignRoles(id, roleIds);
         return R.ok();
     }
+
+    /** 获取当前登录用户详情: 个人中心调用 */
+    @GetMapping("/info")
+    public R<com.portal.common.security.LoginUser> info() {
+        com.portal.common.security.LoginUser user = com.portal.common.security.TokenUtils.getUserInfo();
+        if (user.getUserId() == null) {
+            return R.fail(R.UNAUTHORIZED, "未登录或登录已过期");
+        }
+        return R.ok(user);
+    }
 }

@@ -10,6 +10,15 @@ public interface SysUserMapper extends BaseMapper<SysUser> {
     /** 演示: 与 SysUserMapper.xml 中 selectByUsername 对应 */
     SysUser selectByUsername(String username);
 
+    /** 按 用户名 / 邮箱 / 手机号 任一登录, 返回匹配用户 (用于多账号登录) */
+    SysUser selectByAccount(String account);
+
+    /** 按邮箱查询 (注册/新增时校验唯一) */
+    SysUser selectByEmail(String email);
+
+    /** 按手机号查询 (注册/新增时校验唯一) */
+    SysUser selectByPhone(String phone);
+
     /** 查询用户角色编码列表 (ROLE_XXX) */
     java.util.List<String> selectRoleCodesByUserId(Long userId);
 

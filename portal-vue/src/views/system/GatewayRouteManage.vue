@@ -134,7 +134,7 @@ export default {
         this.list = data.records || []
         this.total = data.total || 0
       } catch (e) {
-        this.$message.error('查询失败')
+        // 全局拦截器已统一提示
       } finally {
         this.loading = false
       }
@@ -165,7 +165,7 @@ export default {
         this.$message.success('操作成功')
         this.loadData()
       } catch (e) {
-        this.$message.error('操作失败')
+        // 全局拦截器已统一提示
       }
     },
     handleDelete (row) {
@@ -176,7 +176,7 @@ export default {
             this.$message.success('删除成功')
             this.loadData()
           } catch (e) {
-            this.$message.error('删除失败')
+            // 全局拦截器已统一提示
           }
         }).catch(() => {})
     },

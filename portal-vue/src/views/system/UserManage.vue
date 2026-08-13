@@ -18,7 +18,14 @@
       <el-table :data="list" stripe border v-loading="loading">
         <el-table-column type="index" label="#" width="60" align="center" />
         <el-table-column prop="username" label="用户名" min-width="120" />
+        <el-table-column label="头像" width="80" align="center">
+          <template #default="{ row }">
+            <el-avatar :size="36" :src="row.avatar || ''">{{ row.nickname ? row.nickname.charAt(0) : 'U' }}</el-avatar>
+          </template>
+        </el-table-column>
         <el-table-column prop="nickname" label="昵称" min-width="120" />
+        <el-table-column prop="email" label="邮箱" min-width="140" />
+        <el-table-column prop="phone" label="手机号" min-width="140" />
         <el-table-column label="状态" width="100" align="center">
           <template #default="{ row }">
             <el-tag :type="row.status === 1 ? 'success' : 'danger'" effect="light">
@@ -47,6 +54,26 @@
         </el-form-item>
         <el-form-item label="昵称">
           <el-input v-model="form.nickname" />
+        </el-form-item>
+        <el-form-item label="邮箱">
+          <el-input v-model="form.email" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="手机号">
+          <el-input v-model="form.phone" placeholder="可选" />
+        </el-form-item>
+        <el-form-item label="头像">
+          <div class="avatar-wrap">
+            <el-avatar :size="64" :src="form.avatar || ''">
+              {{ form.nickname ? form.nickname.charAt(0) : 'U' }}
+            </el-avatar>
+            <el-upload
+              class="avatar-uploader"
+              :show-file-list="false"
+              :http-request="uploadAvatar"
+              accept="image/*">
+              <el-button size="small" type="primary" plain>上传头像</el-button>
+            </el-upload>
+          </div>
         </el-form-item>
         <el-form-item label="密码">
           <el-input v-model="form.password" type="password" placeholder="留空则不修改" show-password />
@@ -81,7 +108,7 @@
 import { ref, reactive, onMounted } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Search, Refresh, Plus, Edit, Delete, UserFilled } from '@element-plus/icons-vue'
-import { getUserPage, saveUser, deleteUser, getRolePage, getUserRoles, assignUserRoles } from '../../api/index.js'
+import { getUserPage, saveUser, deleteUser, getRolePage, getUserRoles, assignUserRoles, uploadImage } from '../../api/index.js'
 
 const list = ref([])
 const total = ref(0)
@@ -90,7 +117,7 @@ const size = ref(10)
 const keyword = ref('')
 const loading = ref(false)
 const dialog = ref(false)
-const form = reactive({ id: null, username: '', nickname: '', password: '', status: 1 })
+const form = reactive({ id: null, username: '', nickname: '', email: '', phone: '', avatar: '', password: '', status: 1 })
 
 const roleDialog = ref(false)
 const allRoles = ref([])
@@ -109,11 +136,17 @@ async function load() {
 function onPage(p) { current.value = p; load() }
 function reset() { keyword.value = ''; current.value = 1; load() }
 function onAdd() {
-  Object.assign(form, { id: null, username: '', nickname: '', password: '', status: 1 })
+  Object.assign(form, { id: null, username: '', nickname: '', email: '', phone: '', avatar: '', password: '', status: 1 })
   dialog.value = true
 }
 function onEdit(row) {
-  Object.assign(form, { id: row.id, username: row.username, nickname: row.nickname, password: '', status: row.status })
+  Object.assign(form, { id: row.id, username: row.username, nickname: row.nickname, email: row.email, phone: row.phone, avatar: row.avatar, password: '', status: row.status })
+  dialog.value = true
+}
+async function uploadAvatar({ file }) {
+  const img = await uploadImage(file)
+  form.avatar = img.url
+  ElMessage.success('头像已上传')
 }
 async function onDelete(row) {
   await ElMessageBox.confirm(`确认删除用户「${row.username}」?`, '提示', { type: 'warning' })
@@ -150,4 +183,5 @@ onMounted(load)
 .table-card { border-radius: 10px; }
 .pager { display: flex; justify-content: flex-end; margin-top: 16px; }
 .dialog-form { padding: 6px 10px; }
+.avatar-wrap { display: flex; align-items: center; gap: 14px; }
 </style>

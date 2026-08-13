@@ -42,7 +42,23 @@
               </el-dropdown-menu>
             </template>
           </el-dropdown>
-          <el-button text type="info" class="logout-btn" @click="onLogout">退出登录</el-button>
+          <el-dropdown @command="onUserCommand">
+            <span class="user-trigger">
+              <el-avatar :size="32" class="user-avatar" :src="avatar || ''">{{ avatar ? '' : avatarText }}</el-avatar>
+              <span class="user-name">{{ nickname || username }}</span>
+              <el-icon><ArrowDown /></el-icon>
+            </span>
+            <template #dropdown>
+              <el-dropdown-menu>
+                <el-dropdown-item command="profile">
+                  <el-icon><User /></el-icon> 个人中心
+                </el-dropdown-item>
+                <el-dropdown-item command="logout" divided>
+                  <el-icon><SwitchButton /></el-icon> 退出登录
+                </el-dropdown-item>
+              </el-dropdown-menu>
+            </template>
+          </el-dropdown>
         </div>
       </el-header>
       <el-main>
@@ -55,7 +71,7 @@
 <script setup>
 import { computed, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { Fold, Expand, Brush, ArrowDown, DataLine, Setting, User, UserFilled, Menu, Notebook, Document, EditPen, Collection, PriceTag, Picture, ChatDotRound, Link, View } from '@element-plus/icons-vue'
+import { Fold, Expand, Brush, ArrowDown, SwitchButton, DataLine, Setting, User, UserFilled, Menu, Notebook, Document, EditPen, Collection, PriceTag, Picture, ChatDotRound, Link, View, MapLocation, OfficeBuilding, Cpu } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '../stores/user'
 
@@ -73,7 +89,10 @@ const iconMap = {
   picture: Picture,
   'chat-dot-round': ChatDotRound,
   link: Link,
-  view: View
+  view: View,
+  'map-location': MapLocation,
+  apartment: OfficeBuilding,
+  appstore: Cpu
 }
 
 const route = useRoute()
@@ -85,7 +104,13 @@ const theme = ref(localStorage.getItem('portal-theme') || 'theme-bili')
 const menus = computed(() => userStore.menus)
 const nickname = computed(() => userStore.nickname)
 const username = computed(() => userStore.username)
+const avatar = computed(() => userStore.avatar)
+const avatarText = computed(() => (nickname.value || username.value || '?').charAt(0).toUpperCase())
 const activeMenu = computed(() => route.path)
+
+// 进入布局即拉取最新用户详情(昵称/邮箱/手机/头像), 确保右上角与个人中心数据一致
+userStore.fetchProfile().catch(() => {})
+
 
 function onThemeChange(val) {
   document.documentElement.classList.remove(theme.value)
@@ -104,6 +129,14 @@ function onLogout() {
     ElMessage.success('已退出登录')
     router.push('/login')
   }).catch(() => {})
+}
+
+function onUserCommand(cmd) {
+  if (cmd === 'profile') {
+    router.push('/profile')
+  } else if (cmd === 'logout') {
+    onLogout()
+  }
 }
 
 // 点击菜单项(叶子)时手动跳转；目录(sub-menu)点击仅展开，不跳转
@@ -151,4 +184,7 @@ function findMenuByPath(list, path) {
 .toggle-btn { font-size: 18px; }
 .logout-btn { color: #606266 !important; }
 .logout-btn:hover { color: var(--brand) !important; }
+.user-trigger { display: flex; align-items: center; gap: 8px; cursor: pointer; outline: none; padding: 0 6px; }
+.user-avatar { background: var(--brand); color: #fff; font-weight: bold; }
+.user-name { font-size: 14px; color: #303133; }
 </style>

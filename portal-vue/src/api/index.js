@@ -21,6 +21,8 @@ export const saveUser = (data) => request.post(`${USER}/user`, data)
 export const deleteUser = (id) => request.delete(`${USER}/user/` + id)
 export const getUserRoles = (id) => request.get(`${USER}/user/` + id + '/roles')
 export const assignUserRoles = (id, roleIds) => request.post(`${USER}/user/` + id + '/roles', roleIds)
+// 获取当前登录用户信息（邮箱/手机/昵称等）
+export const getUserInfo = () => request.get(`${USER}/user/info`)
 
 // ===================== 菜单管理 (portal-user) =====================
 export const getMenuTree = () => request.get(`${USER}/menu/tree`)
@@ -84,3 +86,37 @@ export const saveGatewayRoute = (data) => request.post(`${GATEWAY}/route`, data)
 export const updateGatewayRoute = (data) => request.put(`${GATEWAY}/route/` + data.id, data)
 export const deleteGatewayRoute = (id) => request.delete(`${GATEWAY}/route/` + id)
 export const toggleGatewayRoute = (id, enabled) => request.put(`${GATEWAY}/route/` + id + '/enabled/' + enabled)
+
+// ===================== MES 服务 (区域 / 组织 / 设备 树形管理) =====================
+// 网关 route-mes: /mes -> portal-mes (stripPrefix 默认去除 /mes)
+const MES = '/mes'
+
+// 区域
+export const getAreaTree = () => request.get(`${MES}/area/tree`)
+export const getAreaTreeWithDevices = () => request.get(`${MES}/area/tree-with-devices`)
+export const saveArea = (data) => request.post(`${MES}/area/save`, data)
+export const deleteArea = (id) => request.delete(`${MES}/area/` + id)
+export const moveArea = (id, newParentId) =>
+  request.put(`${MES}/area/move`, null, { params: { id, newParentId: newParentId ?? undefined } })
+
+// 组织
+export const getOrgTree = () => request.get(`${MES}/org/tree`)
+export const getOrgTreeWithDevices = () => request.get(`${MES}/org/tree-with-devices`)
+export const saveOrg = (data) => request.post(`${MES}/org/save`, data)
+export const deleteOrg = (id) => request.delete(`${MES}/org/` + id)
+export const moveOrg = (id, newParentId) =>
+  request.put(`${MES}/org/move`, null, { params: { id, newParentId: newParentId ?? undefined } })
+
+// 设备
+export const getDeviceTree = () => request.get(`${MES}/device/tree`)
+export const saveDevice = (data) => request.post(`${MES}/device/save`, data)
+export const deleteDevice = (id) => request.delete(`${MES}/device/` + id)
+export const moveDevice = (id, { parentDeviceId, areaId, orgId } = {}) =>
+  request.put(`${MES}/device/move`, null, {
+    params: {
+      id,
+      parentDeviceId: parentDeviceId ?? undefined,
+      areaId: areaId ?? undefined,
+      orgId: orgId ?? undefined
+    }
+  })

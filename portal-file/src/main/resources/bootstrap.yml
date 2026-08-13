@@ -38,8 +38,8 @@ portal:
   minio:
     enabled: true
     endpoint: http://127.0.0.1:9005
-    access-key: minioadmin
-    secret-key: minioadmin
+    access-key: admin123
+    secret-key: admin123
     bucket: portal
     # 图片回显统一走网关: /files 路由 -> portal-file 服务的 /image/minio
     url-prefix: http://127.0.0.1:8080/files/image/minio

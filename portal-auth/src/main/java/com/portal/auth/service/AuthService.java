@@ -35,7 +35,7 @@ public class AuthService {
     }
 
     public R<Map<String, Object>> login(String username, String password) {
-        SysUser user = userMapper.selectByUsername(username);
+        SysUser user = userMapper.selectByAccount(username);
         if (user == null) {
             throw new BizException(401, "用户名或密码错误");
         }
@@ -50,23 +50,34 @@ public class AuthService {
         String roles = roleCodes.isEmpty() ? "ROLE_USER" : String.join(",", roleCodes);
         String token = jwtUtil.generate(user.getUsername(), user.getId(), roles);
 
-        Map<String, Object> data = new HashMap<>(4);
+        Map<String, Object> data = new HashMap<>(8);
         data.put("id", user.getId());
         data.put("token", token);
         data.put("username", user.getUsername());
         data.put("nickname", user.getNickname());
+        data.put("email", user.getEmail());
+        data.put("phone", user.getPhone());
+        data.put("avatar", user.getAvatar());
         data.put("roles", roles);
         return R.ok(data);
     }
 
-    public R<Void> register(String username, String password, String nickname) {
+    public R<Void> register(String username, String password, String nickname, String email, String phone) {
         if (userMapper.selectByUsername(username) != null) {
             throw new BizException("用户名已存在");
+        }
+        if (email != null && !email.isEmpty() && userMapper.selectByEmail(email) != null) {
+            throw new BizException("邮箱已被注册");
+        }
+        if (phone != null && !phone.isEmpty() && userMapper.selectByPhone(phone) != null) {
+            throw new BizException("手机号已被注册");
         }
         SysUser user = new SysUser();
         user.setUsername(username);
         user.setPassword(passwordEncoder.encode(password));
         user.setNickname(nickname);
+        user.setEmail(email);
+        user.setPhone(phone);
         user.setStatus(1);
         user.setCreateTime(java.time.LocalDateTime.now());
         userMapper.insert(user);

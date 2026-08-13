@@ -15,7 +15,9 @@ import javax.servlet.http.HttpServletResponse;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.OutputStream;
+import java.security.MessageDigest;
 import java.util.UUID;
 
 @RestController
@@ -46,11 +48,22 @@ public class ImageController {
         if (original != null && original.contains(".")) {
             ext = original.substring(original.lastIndexOf("."));
         }
+
+        // 1. 计算内容指纹(md5), 用于"同一张图片只保存一份"的去重
+        String md5 = computeMd5(file.getInputStream());
+
+        // 2. 已存在同一张图片 -> 直接复用已有地址, 不重复上传/落库
+        BlogImage exist = imageService.getByMd5(md5);
+        if (exist != null) {
+            fillUrl(exist);
+            return R.ok(exist);
+        }
+
+        // 3. 新图片: 真正上传并保存
         String objectName = UUID.randomUUID().toString().replace("-", "") + ext;
 
-        String accessUrl;
         if (minioEnabled) {
-            // 上传到 MinIO, 返回可访问的完整 URL
+            // 上传到 MinIO: 只保存对象名(path), 完整地址由 url-prefix 实时拼出
             try {
                 minioClient.putObject(PutObjectArgs.builder()
                         .bucket(minioBucket)
@@ -61,9 +74,6 @@ public class ImageController {
             } catch (Exception e) {
                 throw new IOException("MinIO 上传失败: " + e.getMessage(), e);
             }
-            accessUrl = minioUrlPrefix.endsWith("/")
-                    ? minioUrlPrefix + objectName
-                    : minioUrlPrefix + "/" + objectName;
         } else {
             // 本地兜底
             File dir = new File(uploadDir).getAbsoluteFile();
@@ -78,42 +88,77 @@ public class ImageController {
                 int len;
                 while ((len = in.read(buf)) != -1) out.write(buf, 0, len);
             }
-            accessUrl = "/files/image/file/" + objectName;
         }
 
         BlogImage img = new BlogImage();
         img.setName(original);
-        img.setUrl(accessUrl);
+        img.setPath(objectName);   // 只存相对路径(对象名)
         img.setSize(file.getSize());
         img.setContentType(file.getContentType());
+        img.setMd5(md5);
         img.setUploaderId(uploaderId);
         imageService.saveOne(img);
+        fillUrl(img);
         return R.ok(img);
+    }
+
+    /** 把 path 拼成完整可访问地址 url (MinIO 模式拼 url-prefix; 本地模式拼 /files/image/file/) */
+    private void fillUrl(BlogImage img) {
+        if (img.getPath() == null) {
+            img.setUrl(null);
+            return;
+        }
+        if (minioEnabled) {
+            img.setUrl(minioUrlPrefix.endsWith("/")
+                    ? minioUrlPrefix + img.getPath()
+                    : minioUrlPrefix + "/" + img.getPath());
+        } else {
+            img.setUrl("/files/image/file/" + img.getPath());
+        }
+    }
+
+    /** 流式计算文件 MD5 (边读边算, 避免大文件一次性读入内存) */
+    private String computeMd5(InputStream in) throws IOException {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("MD5");
+            byte[] buf = new byte[8192];
+            int len;
+            while ((len = in.read(buf)) != -1) {
+                digest.update(buf, 0, len);
+            }
+            byte[] hash = digest.digest();
+            StringBuilder sb = new StringBuilder();
+            for (byte b : hash) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (java.security.NoSuchAlgorithmException e) {
+            throw new IOException("不支持的摘要算法: " + e.getMessage(), e);
+        } finally {
+            in.close();
+        }
     }
 
     @GetMapping("/page")
     public R<Page<BlogImage>> page(@RequestParam(defaultValue = "1") int current,
                                    @RequestParam(defaultValue = "12") int size,
                                    @RequestParam(required = false) String keyword) {
-        return R.ok(imageService.page(current, size, keyword));
+        Page<BlogImage> p = imageService.page(current, size, keyword);
+        if (p.getRecords() != null) {
+            p.getRecords().forEach(this::fillUrl);
+        }
+        return R.ok(p);
     }
 
     @DeleteMapping("/{id}")
     public R<Void> remove(@PathVariable Long id) {
         BlogImage img = imageService.getById(id);
-        if (img != null) {
-            if (minioEnabled && img.getUrl() != null && img.getUrl().startsWith(minioUrlPrefix)) {
-                try {
-                    String objectName = img.getUrl().substring(minioUrlPrefix.length());
-                    if (objectName.startsWith("/")) objectName = objectName.substring(1);
-                    // 兼容 url-prefix 是否带 bucket 前缀两种写法
-                    if (objectName.startsWith(minioBucket + "/")) {
-                        objectName = objectName.substring(minioBucket.length() + 1);
-                    }
-                    minioClient.removeObject(io.minio.RemoveObjectArgs.builder()
-                            .bucket(minioBucket).object(objectName).build());
-                } catch (Exception ignored) {
-                }
+        if (img != null && minioEnabled && img.getPath() != null) {
+            try {
+                // path 即 MinIO 对象名, 直接删除, 无需从完整 url 反解
+                minioClient.removeObject(io.minio.RemoveObjectArgs.builder()
+                        .bucket(minioBucket).object(img.getPath()).build());
+            } catch (Exception ignored) {
             }
         }
         imageService.remove(id);

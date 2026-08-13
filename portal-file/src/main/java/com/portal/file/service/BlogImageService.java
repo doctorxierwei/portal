@@ -8,4 +8,6 @@ public interface BlogImageService {
     BlogImage saveOne(BlogImage image);
     BlogImage getById(Long id);
     void remove(Long id);
+    /** 按内容指纹(md5)查询已存在的图片, 用于去重 */
+    BlogImage getByMd5(String md5);
 }

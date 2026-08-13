@@ -20,9 +20,13 @@ public class AuthController {
 
     @PostMapping("/register")
     public R<Void> register(@RequestBody Map<String, String> body) {
+        String email = body.getOrDefault("email", null);
+        String phone = body.getOrDefault("phone", null);
         return authService.register(
                 body.get("username"),
                 body.get("password"),
-                body.getOrDefault("nickname", body.get("username")));
+                body.getOrDefault("nickname", body.get("username")),
+                (email == null || email.isEmpty()) ? null : email,
+                (phone == null || phone.isEmpty()) ? null : phone);
     }
 }

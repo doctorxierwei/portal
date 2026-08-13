@@ -26,6 +26,10 @@ export default defineConfig({
       '/gateway': {
         target: 'http://127.0.0.1:8080',
         changeOrigin: true
+      },
+      '/mes': {
+        target: 'http://127.0.0.1:8080',
+        changeOrigin: true
       }
     }
   }

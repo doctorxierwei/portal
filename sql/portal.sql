@@ -246,7 +246,8 @@ INSERT INTO gateway_route (name, route_id, prefix, service_id, strip_prefix, ena
 ('用户服务',     'route-user',   '/users',       'portal-user', 1, 1, 20, '用户/角色/菜单服务'),
 ('博客服务',     'route-blog',   '/blogs',       'portal-blog', 1, 1, 30, '博客服务'),
 ('文件服务',     'route-file',   '/files',       'portal-file', 1, 1, 40, '文件/图片服务'),
-('网关自身管理', 'route-gateway','/gateway',     'portal-gateway', 0, 1, 50, '网关自身管理接口')
+('网关自身管理', 'route-gateway','/gateway',     'portal-gateway', 0, 1, 50, '网关自身管理接口'),
+('MES 服务',     'route-mes',   '/mes',         'portal-mes', 1, 1, 60, '区域/组织/设备树形管理')
 ON DUPLICATE KEY UPDATE
     name = VALUES(name),
     prefix = VALUES(prefix),
@@ -279,6 +280,7 @@ UPDATE gateway_route SET name = '用户服务'     WHERE route_id = 'route-user'
 UPDATE gateway_route SET name = '博客服务'     WHERE route_id = 'route-blog'   AND (name IS NULL OR name = '');
 UPDATE gateway_route SET name = '文件服务'     WHERE route_id = 'route-file'   AND (name IS NULL OR name = '');
 UPDATE gateway_route SET name = '网关自身管理' WHERE route_id = 'route-gateway' AND (name IS NULL OR name = '');
+UPDATE gateway_route SET name = 'MES 服务'     WHERE route_id = 'route-mes'    AND (name IS NULL OR name = '');
 
 -- 图片回显地址迁移: 早期版本文件前缀为 /portal-file, 现统一走网关 /files 路由
 -- 仅更新以旧前缀开头的记录, 重复执行安全(无匹配则不更新)
@@ -294,5 +296,323 @@ WHERE cover_url LIKE '/portal-file/image/minio%';
 UPDATE blog_article
 SET cover_url = REPLACE(cover_url, '/portal-file/image/file', '/files/image/file')
 WHERE cover_url LIKE '/portal-file/image/file%';
+
+-- =====================================================================
+-- 用户扩展字段: 邮箱 / 手机号 / 头像 (支持 用户名/邮箱/手机号 登录 + 头像上传)
+-- 使用 ALTER IGNORE/ADD COLUMN IF NOT EXISTS 语法, 重复执行安全
+-- MySQL 8.0 不支持 ADD COLUMN IF NOT EXISTS, 这里用存储过程方式兼容幂等
+SET @exist_email = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'sys_user' AND column_name = 'email');
+SET @exist_phone = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'sys_user' AND column_name = 'phone');
+SET @exist_avatar = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'sys_user' AND column_name = 'avatar');
+
+SET @sql_email = IF(@exist_email = 0, 'ALTER TABLE sys_user ADD COLUMN email VARCHAR(128) DEFAULT NULL COMMENT ''邮箱''', 'SELECT 1');
+SET @sql_phone = IF(@exist_phone = 0, 'ALTER TABLE sys_user ADD COLUMN phone VARCHAR(32) DEFAULT NULL COMMENT ''手机号''', 'SELECT 1');
+SET @sql_avatar = IF(@exist_avatar = 0, 'ALTER TABLE sys_user ADD COLUMN avatar VARCHAR(255) DEFAULT NULL COMMENT ''头像URL''', 'SELECT 1');
+
+PREPARE stmt FROM @sql_email; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql_phone; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+PREPARE stmt FROM @sql_avatar; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+-- =====================================================================
+
+-- =====================================================================
+-- 图片去重: blog_image 增加内容指纹(md5)列 + 唯一索引, 实现"同一张图片只保存一份"
+-- 重复执行安全: 列/索引已存在时跳过
+-- =====================================================================
+SET @exist_md5 = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'blog_image' AND column_name = 'md5');
+SET @sql_md5 = IF(@exist_md5 = 0, "ALTER TABLE blog_image ADD COLUMN md5 VARCHAR(64) DEFAULT NULL COMMENT '内容指纹(MD5), 用于图片去重'", 'SELECT 1');
+PREPARE stmt FROM @sql_md5; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 建唯一索引(已存在则跳过)
+DROP PROCEDURE IF EXISTS add_uk_image_md5;
+DELIMITER $$
+CREATE PROCEDURE add_uk_image_md5()
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE() AND table_name = 'blog_image' AND index_name = 'uk_image_md5'
+    ) THEN
+        ALTER TABLE blog_image ADD UNIQUE KEY uk_image_md5 (md5);
+    END IF;
+END $$
+DELIMITER ;
+CALL add_uk_image_md5();
+DROP PROCEDURE IF EXISTS add_uk_image_md5;
+-- =====================================================================
+
+-- =====================================================================
+-- 索引优化: 为高频查询条件 / 外键关联 / 唯一约束字段补索引
+-- 说明:
+--   1) MySQL 8.0 不支持 CREATE INDEX IF NOT EXISTS, 这里用存储过程 add_index_if_not_exists 幂等创建
+--   2) 重复执行本脚本安全: 索引已存在则跳过
+--   3) 唯一索引(邮箱/手机/菜单path)确保业务唯一性, 普通索引加速查询与联表
+-- =====================================================================
+DROP PROCEDURE IF EXISTS add_index_if_not_exists;
+DELIMITER $$
+CREATE PROCEDURE add_index_if_not_exists(
+    IN p_table  VARCHAR(64),
+    IN p_index  VARCHAR(64),
+    IN p_cols   VARCHAR(256)
+)
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM information_schema.statistics
+        WHERE table_schema = DATABASE()
+          AND table_name  = p_table
+          AND index_name  = p_index
+    ) THEN
+        SET @sql = CONCAT('CREATE INDEX ', p_index, ' ON ', p_table, ' (', p_cols, ')');
+        PREPARE stmt FROM @sql;
+        EXECUTE stmt;
+        DEALLOCATE PREPARE stmt;
+    END IF;
+END$$
+DELIMITER ;
+
+-- 用户: 邮箱/手机唯一(支持邮箱/手机登录), status 用于列表过滤
+CALL add_index_if_not_exists('sys_user', 'uk_user_email', 'email');
+CALL add_index_if_not_exists('sys_user', 'uk_user_phone', 'phone');
+CALL add_index_if_not_exists('sys_user', 'idx_user_status', 'status');
+
+-- 菜单: path 唯一(存量兼容/授权按 path 定位), parent_id 构建菜单树, type 过滤
+CALL add_index_if_not_exists('sys_menu', 'uk_menu_path', 'path');
+CALL add_index_if_not_exists('sys_menu', 'idx_menu_parent', 'parent_id');
+CALL add_index_if_not_exists('sys_menu', 'idx_menu_type', 'type');
+
+-- 用户角色关联: 反向按 role_id 查询
+CALL add_index_if_not_exists('sys_user_role', 'idx_ur_role', 'role_id');
+
+-- 角色菜单关联: 反向按 role_id 查询(菜单树权限判断高频)
+CALL add_index_if_not_exists('sys_role_menu', 'idx_rm_role', 'role_id');
+
+-- 文章: 分类筛选 / 发布状态+时间排序(前台列表) / 作者查询
+CALL add_index_if_not_exists('blog_article', 'idx_article_category', 'category_id');
+CALL add_index_if_not_exists('blog_article', 'idx_article_status_ctime', 'status, create_time');
+CALL add_index_if_not_exists('blog_article', 'idx_article_author', 'author_id');
+
+-- 评论: 按文章查(高频) / 按用户查 / 回复树 parent_id
+CALL add_index_if_not_exists('blog_comment', 'idx_comment_article', 'article_id');
+CALL add_index_if_not_exists('blog_comment', 'idx_comment_user', 'user_id');
+CALL add_index_if_not_exists('blog_comment', 'idx_comment_parent', 'parent_id');
+
+-- 图片: 按上传者查询
+CALL add_index_if_not_exists('blog_image', 'idx_image_uploader', 'uploader_id');
+
+DROP PROCEDURE IF EXISTS add_index_if_not_exists;
+-- =====================================================================
+
+-- =====================================================================
+-- 个人中心功能新增 SQL
+-- 说明: 个人中心通过 GET /users/user/info 返回当前用户的昵称/邮箱/手机号/头像/角色等
+--   1) sys_user 的 email / phone / avatar 列已由前文迁移脚本(约 299 行)幂等补齐, 此处不再重复建列
+--   2) 以下为本次新增: 为存量用户初始化示例头像与邮箱/手机号, 使个人中心首次进入即有数据展示
+--   3) 重复执行安全: 仅对未填写(email/phone/avatar 为空)的记录做 UPDATE, 已填数据不覆盖
+-- =====================================================================
+
+-- 为 admin 初始化资料(若对应字段为空)
+UPDATE sys_user
+SET email   = COALESCE(NULLIF(email, ''), 'admin@portal.com'),
+    phone   = COALESCE(NULLIF(phone, ''), '13800000000'),
+    avatar  = COALESCE(NULLIF(avatar, ''), 'https://avatars.githubusercontent.com/u/0?v=4')
+WHERE username = 'admin';
+
+-- 为 test 初始化资料(若对应字段为空)
+UPDATE sys_user
+SET email   = COALESCE(NULLIF(email, ''), 'test@portal.com'),
+    phone   = COALESCE(NULLIF(phone, ''), '13900000000'),
+    avatar  = COALESCE(NULLIF(avatar, ''), 'https://avatars.githubusercontent.com/u/1?v=4')
+WHERE username = 'test';
+-- =====================================================================
+
+-- =====================================================================
+-- 图片地址拆分: blog_image 新增 path(相对路径/对象名)列, 完整地址改由 url-prefix 实时拼接
+-- 目的: 换 MinIO IP/域名时只改配置, 不用改库, 历史图片依旧可访问
+--   1) url 列不再写入(由后端按 path + portal.minio.url-prefix 实时拼出)
+--   2) 历史数据: 把 url 末尾对象名回填到 path (覆盖 UUID 命名场景)
+-- 重复执行安全: 列已存在则跳过; 仅对 path 为空的记录回填
+-- =====================================================================
+SET @exist_path = (SELECT COUNT(*) FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'blog_image' AND column_name = 'path');
+SET @sql_path = IF(@exist_path = 0, "ALTER TABLE blog_image ADD COLUMN path VARCHAR(512) DEFAULT NULL COMMENT '相对路径/对象名, 不含域名, 换IP只改配置'", 'SELECT 1');
+PREPARE stmt FROM @sql_path; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 历史数据回填: url 末尾一段即对象名(如 .../73e12f.jpg -> 73e12f.jpg)
+-- 注意: 若旧 url 的对象名本身带层级(如 .../2026/08/abc.jpg), 取最后一段会丢失 "2026/08/",
+--       这类记录需人工修正 path; 新上传代码 objectName=UUID+ext 不带层级, 不受影响。
+UPDATE blog_image
+SET path = SUBSTRING_INDEX(url, '/', -1)
+WHERE (path IS NULL OR path = '')
+  AND url IS NOT NULL
+  AND url <> '';
+
+-- 关键修复: url 列改为允许 NULL
+-- 新上传代码 url 标记为 @TableField(exist=false) 不落库, INSERT 不含 url 字段,
+-- 若 url 列是 NOT NULL 且无默认值会报 "Field 'url' doesn't have a default value",
+-- 因此必须将其改为可空(完整地址改由 path + url-prefix 实时拼出)。
+SET @url_nullable = (SELECT IS_NULLABLE FROM information_schema.columns WHERE table_schema = DATABASE() AND table_name = 'blog_image' AND column_name = 'url');
+SET @sql_url = IF(@url_nullable = 'NO', "ALTER TABLE blog_image MODIFY COLUMN url VARCHAR(512) NULL COMMENT '完整地址(已不存储, 由 path+prefix 实时拼)'", 'SELECT 1');
+PREPARE stmt FROM @sql_url; EXECUTE stmt; DEALLOCATE PREPARE stmt;
+
+-- 校验: 列出回填后仍可能异常的记录(path 含 '/' 说明对象名有层级, 需人工核对旧 url)
+-- SELECT id, url, path FROM blog_image WHERE path LIKE '%/%';
+-- =====================================================================
+
+-- =====================================================================
+-- 换 MinIO 地址批量脚本 (修改 IP / 域名 / 端口 时只改这一处)
+-- 用法: 把下面两行的 '旧地址' / '新地址' 改成实际值, 整段重复执行安全。
+--   @OLD_MINIO: 旧地址片段, 例如 'http://127.0.0.1:9000' 或 'http://192.168.1.10:9000'
+--   @NEW_MINIO: 新地址片段, 例如 'http://10.0.0.5:9000'  或 'https://minio.example.com'
+-- 凡是库里直接存了完整 MinIO 地址的字段, 一律 REPLACE 批量替换;
+-- 已经走 path + url-prefix 实时拼地址的字段(如 blog_image.path)不受影响, 无需改。
+-- =====================================================================
+SET @OLD_MINIO = 'http://127.0.0.1:9000';   -- TODO: 改成你当前的旧地址
+SET @NEW_MINIO = 'http://127.0.0.1:9000';   -- TODO: 改成你的新地址
+
+-- 1) 用户头像 (sys_user.avatar 存的是完整 URL)
+UPDATE sys_user
+SET avatar = REPLACE(avatar, @OLD_MINIO, @NEW_MINIO)
+WHERE avatar LIKE CONCAT('%', @OLD_MINIO, '%');
+
+-- 2) 文章封面 (blog_article.cover_url 存的完整 URL)
+UPDATE blog_article
+SET cover_url = REPLACE(cover_url, @OLD_MINIO, @NEW_MINIO)
+WHERE cover_url LIKE CONCAT('%', @OLD_MINIO, '%');
+
+-- 3) 历史图片完整地址 (blog_image.url 旧数据, 已不落库但存量可能含旧 IP)
+UPDATE blog_image
+SET url = REPLACE(url, @OLD_MINIO, @NEW_MINIO)
+WHERE url LIKE CONCAT('%', @OLD_MINIO, '%');
+
+-- 4) 其它可能存了 MinIO 地址的表(按需扩展, 不存在的列 UPDATE 会报错可删掉对应段)
+-- UPDATE blog_image SET md5 = md5 WHERE 1=0;  -- 占位: md5 不是地址, 无需处理
+-- 若你还把 MinIO 地址写进了别的表字段, 按上面格式补一句即可。
+
+-- 校验: 执行后确认库里再无旧地址残留
+-- SELECT 'sys_user' t, COUNT(*) c FROM sys_user   WHERE avatar    LIKE CONCAT('%', @OLD_MINIO, '%')
+-- UNION ALL
+-- SELECT 'blog_article', COUNT(*) FROM blog_article WHERE cover_url LIKE CONCAT('%', @OLD_MINIO, '%')
+-- UNION ALL
+-- SELECT 'blog_image',  COUNT(*) FROM blog_image   WHERE url       LIKE CONCAT('%', @OLD_MINIO, '%');
+-- =====================================================================
+
+-- =====================================================================
+-- MES 服务表 (区域 / 组织 / 设备 树形管理)
+-- 重复执行安全 (CREATE TABLE IF NOT EXISTS + 幂等种子)
+-- =====================================================================
+
+-- 区域管理
+CREATE TABLE IF NOT EXISTS mes_area (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(64)  NOT NULL COMMENT '区域编码',
+    name        VARCHAR(128) NOT NULL COMMENT '区域名称',
+    location    VARCHAR(255) DEFAULT NULL COMMENT '区域位置',
+    parent_id   BIGINT       NOT NULL DEFAULT 0 COMMENT '上级区域 id, 顶级为 0',
+    enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '是否启用 1启用 0禁用',
+    create_time DATETIME     DEFAULT NULL,
+    update_time DATETIME     DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_area_code (code),
+    KEY idx_area_parent (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='区域管理';
+
+-- 组织架构管理
+CREATE TABLE IF NOT EXISTS mes_org (
+    id          BIGINT       NOT NULL AUTO_INCREMENT,
+    code        VARCHAR(64)  NOT NULL COMMENT '组织编码',
+    name        VARCHAR(128) NOT NULL COMMENT '组织名称',
+    parent_id   BIGINT       NOT NULL DEFAULT 0 COMMENT '上级组织 id, 顶级为 0',
+    org_type    TINYINT      NOT NULL DEFAULT 1 COMMENT '组织类型 1工厂 2车间 3产线 4部门',
+    enabled     TINYINT      NOT NULL DEFAULT 1 COMMENT '是否启用 1启用 0禁用',
+    create_time DATETIME     DEFAULT NULL,
+    update_time DATETIME     DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_org_code (code),
+    KEY idx_org_parent (parent_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='组织架构管理';
+
+-- 设备管理
+CREATE TABLE IF NOT EXISTS mes_device (
+    id             BIGINT       NOT NULL AUTO_INCREMENT,
+    code           VARCHAR(64)  NOT NULL COMMENT '设备编码',
+    name           VARCHAR(128) NOT NULL COMMENT '设备名称',
+    parent_device_id BIGINT     NOT NULL DEFAULT 0 COMMENT '组成上级设备 id (本设备是某设备的子组件), 顶级为 0',
+    area_id        BIGINT       DEFAULT NULL COMMENT '挂载区域 id (可空, 与 org_id 可同时存在于两个维度)',
+    org_id         BIGINT       DEFAULT NULL COMMENT '挂载组织 id (可空, 与 area_id 可同时存在于两个维度)',
+    device_type    TINYINT      NOT NULL DEFAULT 1 COMMENT '设备类型 1设备 2机床 3产线 4工位',
+    enabled        TINYINT      NOT NULL DEFAULT 1 COMMENT '是否启用 1启用 0禁用',
+    create_time    DATETIME     DEFAULT NULL,
+    update_time    DATETIME     DEFAULT NULL,
+    PRIMARY KEY (id),
+    UNIQUE KEY uk_device_code (code),
+    KEY idx_device_parent (parent_device_id),
+    KEY idx_device_area (area_id),
+    KEY idx_device_org (org_id)
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COMMENT='设备管理';
+
+-- 区域种子 (华东厂区 > 一号车间 > A 线)
+INSERT INTO mes_area (id, code, name, location, parent_id, enabled) VALUES
+(1, 'AREA-EAST', '华东厂区', '上海', 0, 1),
+(2, 'AREA-W1',   '一号车间', '厂区东北', 1, 1),
+(3, 'AREA-A1',   'A 生产线', '一号车间内', 2, 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name), location = VALUES(location), parent_id = VALUES(parent_id), enabled = VALUES(enabled);
+
+-- 组织种子 (工厂 > 车间 > 产线 > 部门)
+INSERT INTO mes_org (id, code, name, parent_id, org_type, enabled) VALUES
+(1, 'ORG-FACTORY', '华东工厂', 0, 1, 1),
+(2, 'ORG-WORKSHOP','一号车间', 1, 2, 1),
+(3, 'ORG-LINE',    'A 产线',   2, 3, 1),
+(4, 'ORG-DEPT',    '设备科',   2, 4, 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name), parent_id = VALUES(parent_id), org_type = VALUES(org_type), enabled = VALUES(enabled);
+
+-- 设备种子
+--   D-100 主装配线(类型:产线) 由 D-101 传送带 + D-102 机械臂 组成, 同时挂载在 A 生产线(区域) 与 A 产线(组织) 两个维度
+--   D-200 巡检机器人 独立设备(类型:设备), 挂在设备科(组织)
+INSERT INTO mes_device (id, code, name, parent_device_id, area_id, org_id, device_type, enabled) VALUES
+(101, 'D-101', '进料传送带', 100, 3, 3, 1, 1),
+(102, 'D-102', '焊接机械臂', 100, 3, 3, 2, 1),
+(100, 'D-100', '主装配线',   0,   3, 3, 3, 1),
+(200, 'D-200', '巡检机器人', 0,   NULL, 4, 1, 1)
+ON DUPLICATE KEY UPDATE name = VALUES(name), parent_device_id = VALUES(parent_device_id), area_id = VALUES(area_id), org_id = VALUES(org_id), device_type = VALUES(device_type), enabled = VALUES(enabled);
+
+-- ---------------------------------------------------------------------
+-- MES 菜单种子 (幂等: 不存在才插入; 父菜单 + 三个子页面)
+-- 父菜单 id 用大号自增避开与现有菜单冲突; 子菜单 parent_id 取父菜单的 id
+-- ---------------------------------------------------------------------
+INSERT INTO sys_menu (parent_id, name, path, component, icon, sort, type, permission)
+SELECT * FROM (
+    SELECT 0 AS a, 'MES 管理' AS b, '/mes' AS c, 'Layout' AS d, 'setting' AS e, 5 AS f, 0 AS g, '' AS h
+) t
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE path = '/mes' AND type = 0);
+
+-- 取刚才插入/已存在的 MES 父菜单 id
+SET @MES_PARENT = (SELECT id FROM sys_menu WHERE path = '/mes' AND type = 0 LIMIT 1);
+
+INSERT INTO sys_menu (parent_id, name, path, component, icon, sort, type, permission)
+SELECT * FROM (
+    SELECT @MES_PARENT AS a, '区域管理' AS b, '/mes/area' AS c, 'mes/area' AS d, 'map-location' AS e, 1 AS f, 1 AS g, 'mes:area:view' AS h
+) t WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE path = '/mes/area' AND type = 1);
+
+INSERT INTO sys_menu (parent_id, name, path, component, icon, sort, type, permission)
+SELECT * FROM (
+    SELECT @MES_PARENT AS a, '组织管理' AS b, '/mes/org' AS c, 'mes/org' AS d, 'apartment' AS e, 2 AS f, 1 AS g, 'mes:org:view' AS h
+) t WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE path = '/mes/org' AND type = 1);
+
+INSERT INTO sys_menu (parent_id, name, path, component, icon, sort, type, permission)
+SELECT * FROM (
+    SELECT @MES_PARENT AS a, '设备管理' AS b, '/mes/device' AS c, 'mes/device' AS d, 'appstore' AS e, 3 AS f, 1 AS g, 'mes:device:view' AS h
+) t WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE path = '/mes/device' AND type = 1);
+
+-- 超级管理员(all_menu=1)会经后续 SELECT 1,id 自动获得; 若脚本已跑到角色菜单段, 这里补一次确保拥有
+INSERT INTO sys_role_menu (role_id, menu_id)
+SELECT 1, id FROM sys_menu
+WHERE id IN (@MES_PARENT,
+             (SELECT id FROM sys_menu WHERE path = '/mes/area'   AND type = 1 LIMIT 1),
+             (SELECT id FROM sys_menu WHERE path = '/mes/org'    AND type = 1 LIMIT 1),
+             (SELECT id FROM sys_menu WHERE path = '/mes/device' AND type = 1 LIMIT 1))
+  AND NOT EXISTS (SELECT 1 FROM sys_role_menu rm WHERE rm.role_id = 1 AND rm.menu_id = sys_menu.id);
+
+-- 菜单 icon 同步 (icon 存的是前端 iconMap 的 key, 实际组件在 MainLayout 映射)
+UPDATE sys_menu SET icon = 'setting'      WHERE path = '/mes'        AND type = 0;
+UPDATE sys_menu SET icon = 'map-location' WHERE path = '/mes/area'   AND type = 1;
+UPDATE sys_menu SET icon = 'apartment'    WHERE path = '/mes/org'    AND type = 1;
+UPDATE sys_menu SET icon = 'appstore'     WHERE path = '/mes/device' AND type = 1;
 -- =====================================================================
 
