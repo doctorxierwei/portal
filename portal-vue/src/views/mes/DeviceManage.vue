@@ -24,7 +24,7 @@
           <span class="tree-node">
             <span class="node-label">
               {{ data.name }}
-              <el-tag size="small" :type="deviceTypeMeta[data.deviceType]?.tag || 'success'" effect="plain" class="type-tag">{{ deviceTypeMeta[data.deviceType]?.label || '设备' }}</el-tag>
+              <el-tag size="small" type="success" effect="plain" class="type-tag">{{ data.deviceTypeName || deviceTypeLabel(data.deviceType) }}</el-tag>
               <el-tag size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
               <el-tag v-if="data.enabled !== 1" size="small" type="danger" effect="plain">禁用</el-tag>
               <el-tag v-if="data.areaId || data.orgId" size="small" type="success" effect="plain">
@@ -42,11 +42,11 @@
       </el-tree>
     </el-card>
 
-    <!-- 右: 区域/组织树(展示挂载的设备) -->
+    <!-- 右: 区域/组织树(设备作为子节点, 可拖拽调整挂载) -->
     <el-card shadow="never" class="tree-card mount-card">
       <template #header>
         <div class="card-head">
-          <span class="title">区域 / 组织 挂载视图</span>
+          <span class="title">区域 / 组织 挂载视图 (拖拽调整挂载)</span>
           <el-switch v-model="showMount" inline-prompt active-text="显示设备" inactive-text="仅结构"
                      @change="loadMount" />
         </div>
@@ -54,18 +54,27 @@
 
       <div class="mount-block">
         <div class="mount-block-title">区域树</div>
-        <el-tree :data="areaTree" :props="treeProps" node-key="id" default-expand-all v-loading="loadingArea">
-          <template #default="{ data }">
+        <el-tree
+          ref="areaTreeRef"
+          :data="areaTree"
+          :props="treeProps"
+          node-key="id"
+          default-expand-all
+          draggable
+          :allow-drop="allowMountDrop"
+          @node-drop="onAreaNodeDrop"
+          v-loading="loadingArea"
+        >
+          <template #default="{ node, data }">
             <span class="tree-node">
-              <span class="node-label">{{ data.name }}
-                <el-tag size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
+              <span class="node-label">
+                <span v-if="isDevice(data)" class="dev-icon">&#x1F527;</span>
+                {{ data.name }}
+                <el-tag v-if="isDevice(data)" size="small" type="success" effect="plain" class="type-tag">{{ data.deviceTypeName || deviceTypeLabel(data.deviceType) }}</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
               </span>
-              <span class="node-extra" v-if="showMount && data.devices && data.devices.length">
-                设备:
-                <template v-for="(d, i) in data.devices" :key="d.id">
-                  {{ i > 0 ? '、' : '' }}{{ d.name }}
-                  <el-tag size="small" :type="deviceTypeMeta[d.deviceType]?.tag || 'success'" effect="plain" class="type-tag">{{ deviceTypeMeta[d.deviceType]?.label || '设备' }}</el-tag>
-                </template>
+              <span class="node-actions" v-if="isDevice(data)">
+                <el-button link type="warning" size="small" :icon="Edit" @click.stop="onEdit(data)">编辑</el-button>
               </span>
             </span>
           </template>
@@ -74,18 +83,27 @@
 
       <div class="mount-block">
         <div class="mount-block-title">组织树</div>
-        <el-tree :data="orgTree" :props="treeProps" node-key="id" default-expand-all v-loading="loadingOrg">
-          <template #default="{ data }">
+        <el-tree
+          ref="orgTreeRef"
+          :data="orgTree"
+          :props="treeProps"
+          node-key="id"
+          default-expand-all
+          draggable
+          :allow-drop="allowMountDrop"
+          @node-drop="onOrgNodeDrop"
+          v-loading="loadingOrg"
+        >
+          <template #default="{ node, data }">
             <span class="tree-node">
-              <span class="node-label">{{ data.name }}
-                <el-tag size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
+              <span class="node-label">
+                <span v-if="isDevice(data)" class="dev-icon">&#x1F527;</span>
+                {{ data.name }}
+                <el-tag v-if="isDevice(data)" size="small" type="success" effect="plain" class="type-tag">{{ data.deviceTypeName || deviceTypeLabel(data.deviceType) }}</el-tag>
+                <el-tag v-else size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
               </span>
-              <span class="node-extra" v-if="showMount && data.devices && data.devices.length">
-                设备:
-                <template v-for="(d, i) in data.devices" :key="d.id">
-                  {{ i > 0 ? '、' : '' }}{{ d.name }}
-                  <el-tag size="small" :type="deviceTypeMeta[d.deviceType]?.tag || 'success'" effect="plain" class="type-tag">{{ deviceTypeMeta[d.deviceType]?.label || '设备' }}</el-tag>
-                </template>
+              <span class="node-actions" v-if="isDevice(data)">
+                <el-button link type="warning" size="small" :icon="Edit" @click.stop="onEdit(data)">编辑</el-button>
               </span>
             </span>
           </template>
@@ -134,7 +152,7 @@
         </el-form-item>
         <el-form-item label="设备类型">
           <el-select v-model="form.deviceType" placeholder="请选择类型" style="width:100%">
-            <el-option v-for="(m, k) in deviceTypeMeta" :key="k" :label="m.label" :value="Number(k)" />
+            <el-option v-for="o in deviceTypeOptions" :key="o.value" :label="o.label" :value="Number(o.value)" />
           </el-select>
         </el-form-item>
         <el-form-item label="是否启用">
@@ -189,18 +207,42 @@ import { Plus, Edit, Delete } from '@element-plus/icons-vue'
 import {
   getDeviceTree, saveDevice, deleteDevice, moveDevice,
   getAreaTree, getAreaTreeWithDevices,
-  getOrgTree, getOrgTreeWithDevices
+  getOrgTree, getOrgTreeWithDevices, getDictByType
 } from '../../api/index.js'
 
 const treeProps = { label: 'name', children: 'children' }
 const devTreeRef = ref()
+const areaTreeRef = ref()
+const orgTreeRef = ref()
 
-// 设备类型元数据
-const deviceTypeMeta = {
-  1: { label: '设备', tag: 'success' },
-  2: { label: '机床', tag: 'warning' },
-  3: { label: '产线', tag: 'primary' },
-  4: { label: '工位', tag: 'info' }
+/** 判断节点是否为设备(通过是否有 deviceType 字段区分) */
+function isDevice(data) {
+  return data && data.deviceType !== undefined
+}
+
+/** 把后端返回的 devices 数组合并到节点的 children 中, 让 el-tree 渲染为子节点 */
+function mergeDevicesToChildren(nodes) {
+  for (const n of nodes) {
+    if (n.devices && n.devices.length) {
+      const devChildren = n.devices.map(d => ({ ...d, _isDevice: true }))
+      if (!n.children) n.children = []
+      n.children.push(...devChildren)
+    }
+    if (n.children) mergeDevicesToChildren(n.children)
+  }
+}
+
+// 设备类型选项来自字典(可在「系统管理-字典管理」配置)
+const deviceTypeOptions = ref([])
+const deviceTypeMap = ref({})
+function deviceTypeLabel(v) { return deviceTypeMap.value[v] || ('类型' + v) }
+
+async function loadDeviceDict() {
+  try {
+    const dev = await getDictByType('mes_device_type')
+    deviceTypeOptions.value = dev || []
+    deviceTypeMap.value = Object.fromEntries((dev || []).map(o => [o.value, o.label]))
+  } catch (e) { /* 字典不可用时退化为 value */ }
 }
 
 // 设备
@@ -244,6 +286,8 @@ async function loadAreas() {
   loadingArea.value = true
   try {
     areaTree.value = (showMount.value ? await getAreaTreeWithDevices() : await getAreaTree()) || []
+    // 把设备合并为子节点(树渲染)
+    mergeDevicesToChildren(areaTree.value)
     const m = {}
     const walk = (ns) => ns.forEach(n => { m[n.id] = n.name; if (n.children) walk(n.children) })
     walk(areaTree.value)
@@ -256,6 +300,7 @@ async function loadOrgs() {
   loadingOrg.value = true
   try {
     orgTree.value = (showMount.value ? await getOrgTreeWithDevices() : await getOrgTree()) || []
+    mergeDevicesToChildren(orgTree.value)
     const m = {}
     const walk = (ns) => ns.forEach(n => { m[n.id] = n.name; if (n.children) walk(n.children) })
     walk(orgTree.value)
@@ -323,6 +368,46 @@ async function onDeviceDrop(draggingNode, dropNode, dropType) {
   }
 }
 
+// ---- 挂载视图拖拽(区域/组织树) ----
+function allowMountDrop(draggingNode, dropNode, type) {
+  // 设备只能拖到区域/组织节点上(不能拖到另一个设备下)
+  if (isDevice(draggingNode.data)) {
+    // 设备拖拽: 只允许放到非设备节点上
+    return !isDevice(dropNode.data)
+  }
+  return true
+}
+async function onAreaNodeDrop(draggingNode, dropNode, dropType) {
+  await handleMountDrop(draggingNode, dropNode, dropType, 'area')
+}
+async function onOrgNodeDrop(draggingNode, dropNode, dropType) {
+  await handleMountDrop(draggingNode, dropNode, dropType, 'org')
+}
+async function handleMountDrop(draggingNode, dropNode, dropType, mountType) {
+  if (!isDevice(draggingNode.data)) {
+    // 非设备节点拖拽不处理(或可扩展为移动区域/组织层级)
+    loadMount()
+    return
+  }
+  const devId = draggingNode.data.id
+  let payload = {}
+  if (mountType === 'area') {
+    payload.areaId = dropNode.key
+    payload.orgId = draggingNode.data.orgId ?? null
+  } else {
+    payload.orgId = dropNode.key
+    payload.areaId = draggingNode.data.areaId ?? null
+  }
+  try {
+    await moveDevice(devId, payload)
+    ElMessage.success('挂载已调整，子设备已跟随移动')
+  } catch (e) {
+    ElMessage.error('调整挂载失败: ' + (e.message || e))
+  }
+  // 无论成败都刷新两侧数据(后端 move() 已处理子设备跟随)
+  loadDevices(); loadMount()
+}
+
 // ---- 仅挂载弹窗 ----
 function openMount(row) {
   mountForm.id = row.id
@@ -337,7 +422,7 @@ async function submitMount() {
   loadDevices(); loadMount()
 }
 
-onMounted(() => { loadDevices(); loadMount() })
+onMounted(async () => { await loadDeviceDict(); await loadDevices(); await loadMount() })
 </script>
 
 <style scoped>
@@ -356,4 +441,5 @@ onMounted(() => { loadDevices(); loadMount() })
 .mount-block { margin-bottom: 14px; }
 .mount-block-title { font-weight: 600; margin: 6px 0; color: #606266; }
 .mount-hint { color: #909399; font-size: 12px; margin-top: 4px; }
+.dev-icon { font-size: 14px; margin-right: 2px; }
 </style>

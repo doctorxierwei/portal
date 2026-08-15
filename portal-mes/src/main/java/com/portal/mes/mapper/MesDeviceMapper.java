@@ -34,4 +34,8 @@ public interface MesDeviceMapper extends BaseMapper<MesDevice> {
     /** 把某组织下所有设备解挂 */
     @Update("UPDATE mes_device SET org_id = NULL WHERE org_id = #{orgId}")
     int clearOrgMount(@Param("orgId") Long orgId);
+
+    /** 字典同步: 按 device_type 回写 device_type_name */
+    @Update("UPDATE mes_device SET device_type_name = #{label} WHERE device_type = #{value}")
+    int syncDeviceTypeName(@Param("value") String value, @Param("label") String label);
 }

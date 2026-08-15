@@ -45,4 +45,7 @@ public class MesOrg implements Serializable {
     /** 挂载在该组织下的设备(挂载树用) */
     @TableField(exist = false)
     private List<MesDevice> devices;
+
+    /** 组织类型名称(由字典同步冗余, 落库) */
+    private String orgTypeName;
 }

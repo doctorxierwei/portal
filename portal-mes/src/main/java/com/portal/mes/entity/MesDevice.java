@@ -51,4 +51,7 @@ public class MesDevice implements Serializable {
 
     @TableField(exist = false)
     private List<MesDevice> children;
+
+    /** 设备类型名称(由字典同步冗余, 落库) */
+    private String deviceTypeName;
 }

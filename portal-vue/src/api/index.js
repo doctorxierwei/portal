@@ -39,6 +39,19 @@ export const assignRoleMenus = (id, menuIds) => request.post(`${USER}/role/` + i
 export const getRoleUsers = (id) => request.get(`${USER}/role/` + id + '/users')
 export const assignRoleUsers = (id, userIds) => request.post(`${USER}/role/` + id + '/users', userIds)
 
+// ===================== 字典管理 (portal-user) =====================
+// 字典类型
+export const getDictTypeList = () => request.get(`${USER}/dict/type/list`)
+export const saveDictType = (data) => request.post(`${USER}/dict/type/save`, data)
+export const deleteDictType = (id) => request.delete(`${USER}/dict/type/delete?id=` + id)
+// 字典数据
+export const getDictDataList = (typeCode) => request.get(`${USER}/dict/data/list`, { params: { typeCode } })
+export const getDictByType = (typeCode) => request.get(`${USER}/dict/data/by-type/` + typeCode)
+export const saveDictData = (data) => request.post(`${USER}/dict/data/save`, data)
+export const deleteDictData = (id) => request.delete(`${USER}/dict/data/delete?id=` + id)
+// 同步: 通知相关服务刷新字典缓存
+export const syncDict = (typeCode) => request.post(`${USER}/dict/data/sync/` + typeCode)
+
 // ===================== 博客模块 (portal-blog) =====================
 // 文章
 export const getArticlePage = (params) => request.get(`${BLOG}/article/page`, { params })

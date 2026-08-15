@@ -27,7 +27,7 @@
           <span class="tree-node">
             <span class="node-label">
               {{ data.name }}
-              <el-tag v-if="data.deviceType" size="small" :type="deviceTypeMeta[data.deviceType]?.tag || 'success'" effect="plain" class="type-tag">{{ deviceTypeMeta[data.deviceType]?.label || '设备' }}</el-tag>
+              <el-tag v-if="data.deviceType" size="small" type="success" effect="plain" class="type-tag">{{ data.deviceTypeName || ('类型' + data.deviceType) }}</el-tag>
               <el-tag v-else size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
               <el-tag v-if="data.enabled !== 1" size="small" type="danger" effect="plain">禁用</el-tag>
             </span>
@@ -95,13 +95,6 @@ const tree = ref([])
 const loading = ref(false)
 const showDevices = ref(false)
 const treeProps = { label: 'name', children: 'children' }
-
-const deviceTypeMeta = {
-  1: { label: '设备', tag: 'success' },
-  2: { label: '机床', tag: 'warning' },
-  3: { label: '产线', tag: 'primary' },
-  4: { label: '工位', tag: 'info' }
-}
 
 const dialog = ref(false)
 const form = ref({ id: null, code: '', name: '', location: '', parentId: 0, enabled: 1 })

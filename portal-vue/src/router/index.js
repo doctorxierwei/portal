@@ -47,6 +47,7 @@ const componentMap = {
   'system/menu': () => import('../views/system/MenuManage.vue'),
   'system/gateway-route': () => import('../views/system/GatewayRouteManage.vue'),
   'system/role': () => import('../views/system/RoleManage.vue'),
+  'system/dict': () => import('../views/system/DictManage.vue'),
   'dashboard': () => import('../views/Dashboard.vue'),
   'blog/article': () => import('../views/blog/ArticleManage.vue'),
   'blog/write': () => import('../views/blog/ArticleWrite.vue'),

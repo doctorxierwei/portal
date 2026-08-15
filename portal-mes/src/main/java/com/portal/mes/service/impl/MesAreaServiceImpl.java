@@ -6,6 +6,7 @@ import com.portal.mes.entity.MesArea;
 import com.portal.mes.entity.MesDevice;
 import com.portal.mes.mapper.MesAreaMapper;
 import com.portal.mes.mapper.MesDeviceMapper;
+import com.portal.mes.service.DictService;
 import com.portal.mes.service.MesAreaService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +22,11 @@ import java.util.stream.Collectors;
 public class MesAreaServiceImpl extends ServiceImpl<MesAreaMapper, MesArea> implements MesAreaService {
 
     private final MesDeviceMapper deviceMapper;
+    private final DictService dictService;
 
-    public MesAreaServiceImpl(MesDeviceMapper deviceMapper) {
+    public MesAreaServiceImpl(MesDeviceMapper deviceMapper, DictService dictService) {
         this.deviceMapper = deviceMapper;
+        this.dictService = dictService;
     }
 
     @Override
@@ -49,7 +52,13 @@ public class MesAreaServiceImpl extends ServiceImpl<MesAreaMapper, MesArea> impl
 
     private void fillDevices(List<MesArea> nodes, Map<Long, List<MesDevice>> byArea) {
         for (MesArea node : nodes) {
-            node.setDevices(byArea.getOrDefault(node.getId(), new ArrayList<>()));
+            List<MesDevice> devices = byArea.getOrDefault(node.getId(), new ArrayList<>());
+            for (MesDevice d : devices) {
+                if (d.getDeviceTypeName() == null || d.getDeviceTypeName().isEmpty()) {
+                    d.setDeviceTypeName(dictService.getLabel("mes_device_type", d.getDeviceType()));
+                }
+            }
+            node.setDevices(devices);
             if (!CollectionUtils.isEmpty(node.getChildren())) {
                 fillDevices(node.getChildren(), byArea);
             }

@@ -26,14 +26,25 @@ app.use(ElementPlus)
 // 先拉取菜单树并注册动态路由, 否则刷新进入 /system/xxx 时动态路由尚未注册,
 // 会先打印一次 "No match found" 警告
 const userStore = useUserStore()
-if (userStore.token) {
-  try {
-    const { refreshUserMenus } = await import('./router')
-    await refreshUserMenus()
-  } catch (e) {
-    // 预加载失败不阻塞启动, 仍交给路由守卫处理
+
+async function bootstrap() {
+  if (userStore.token) {
+    try {
+      const { refreshUserMenus } = await import('./router')
+      await refreshUserMenus()
+    } catch (e) {
+      // 启动期菜单拉取失败: 多半是 token 已失效/网关未就绪。
+      // 注意此时 router 还没 app.use, 响应拦截器里的 router.replace('/login') 会被丢弃,
+      // 而守卫兜底的 next('/login') 又会和已触发的重定向重入, 导致页面卡死。
+      // 兜底: 清掉登录态并用 window.location 强制跳登录, 避开未初始化的 router。
+      console.warn('[portal] 启动期菜单树拉取失败, 强制跳登录:', e?.message)
+      userStore.logout()
+      window.location.replace('/login')
+      return // 已重定向, 不再初始化路由/挂载
+    }
   }
+  app.use(router)
+  app.mount('#app')
 }
 
-app.use(router)
-app.mount('#app')
+bootstrap()

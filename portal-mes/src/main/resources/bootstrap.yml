@@ -22,10 +22,23 @@ spring:
     activate:
       on-profile: dev
   datasource:
-    url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
-    username: root
-    password: 123456
-    driver-class-name: com.mysql.cj.jdbc.Driver
+    # 多数据源: master 为默认主库, 可按需增加第二个数据源(如 second)
+    # 字典同步规则中的 dataSource 即对应这里的 key; 为空或不匹配时回退主库(strict=false)
+    dynamic:
+      primary: master
+      strict: false
+      datasource:
+        master:
+          url: jdbc:mysql://127.0.0.1:3306/portal?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+          username: root
+          password: 123456
+          driver-class-name: com.mysql.cj.jdbc.Driver
+        # 第二个数据源示例(启用时取消注释并改名为规则中引用的值):
+        # second:
+        #   url: jdbc:mysql://127.0.0.1:3306/portal2?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&allowMultiQueries=true
+        #   username: root
+        #   password: 123456
+        #   driver-class-name: com.mysql.cj.jdbc.Driver
 
 mybatis-plus:
   mapper-locations: classpath*:/mapper/**/*.xml

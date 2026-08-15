@@ -6,6 +6,7 @@ import com.portal.mes.entity.MesDevice;
 import com.portal.mes.entity.MesOrg;
 import com.portal.mes.mapper.MesDeviceMapper;
 import com.portal.mes.mapper.MesOrgMapper;
+import com.portal.mes.service.DictService;
 import com.portal.mes.service.MesOrgService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,9 +22,11 @@ import java.util.stream.Collectors;
 public class MesOrgServiceImpl extends ServiceImpl<MesOrgMapper, MesOrg> implements MesOrgService {
 
     private final MesDeviceMapper deviceMapper;
+    private final DictService dictService;
 
-    public MesOrgServiceImpl(MesDeviceMapper deviceMapper) {
+    public MesOrgServiceImpl(MesDeviceMapper deviceMapper, DictService dictService) {
         this.deviceMapper = deviceMapper;
+        this.dictService = dictService;
     }
 
     @Override
@@ -48,7 +51,17 @@ public class MesOrgServiceImpl extends ServiceImpl<MesOrgMapper, MesOrg> impleme
 
     private void fillDevices(List<MesOrg> nodes, Map<Long, List<MesDevice>> byOrg) {
         for (MesOrg node : nodes) {
-            node.setDevices(byOrg.getOrDefault(node.getId(), new ArrayList<>()));
+            // 优先用落库名称(字典同步冗余), 缺省时调字典兜底
+            if (node.getOrgTypeName() == null || node.getOrgTypeName().isEmpty()) {
+                node.setOrgTypeName(dictService.getLabel("mes_org_type", node.getOrgType()));
+            }
+            List<MesDevice> devices = byOrg.getOrDefault(node.getId(), new ArrayList<>());
+            for (MesDevice d : devices) {
+                if (d.getDeviceTypeName() == null || d.getDeviceTypeName().isEmpty()) {
+                    d.setDeviceTypeName(dictService.getLabel("mes_device_type", d.getDeviceType()));
+                }
+            }
+            node.setDevices(devices);
             if (!CollectionUtils.isEmpty(node.getChildren())) {
                 fillDevices(node.getChildren(), byOrg);
             }
@@ -109,6 +122,9 @@ public class MesOrgServiceImpl extends ServiceImpl<MesOrgMapper, MesOrg> impleme
         for (MesOrg o : all) {
             Long pid = (o.getParentId() == null) ? 0L : o.getParentId();
             if (pid.equals(parentId)) {
+                if (o.getOrgTypeName() == null || o.getOrgTypeName().isEmpty()) {
+                    o.setOrgTypeName(dictService.getLabel("mes_org_type", o.getOrgType()));
+                }
                 List<MesOrg> children = childrenMap.get(o.getId());
                 if (!CollectionUtils.isEmpty(children)) {
                     o.setChildren(children);

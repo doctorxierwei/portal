@@ -1,6 +1,5 @@
 import axios from 'axios'
 import { ElMessage } from 'element-plus'
-import router from '../router'
 
 /**
  * 全局请求配置: 与后端统一返回结构 R<T> = { code, msg, data } 对齐
@@ -24,6 +23,27 @@ export const RESULT_CODE = {
 
 let isRedirectingLogin = false
 
+/**
+ * 强制跳登录的兜底逻辑: 不依赖 router 实例, 即使 router 还没 app.use 也能生效
+ * (main.js 启动期或在路由守卫异步过程中, router.replace 可能被丢弃或与其他 next 重入冲突)
+ */
+function forceToLogin(msg) {
+  if (isRedirectingLogin) return
+  isRedirectingLogin = true
+  ElMessage.error(msg || '登录已过期，请重新登录')
+  // 清掉登录态。注意不要清 portal-theme(主题偏好与登录无关)
+  localStorage.removeItem('token')
+  localStorage.removeItem('userId')
+  localStorage.removeItem('username')
+  localStorage.removeItem('nickname')
+  localStorage.removeItem('email')
+  localStorage.removeItem('phone')
+  localStorage.removeItem('avatar')
+  localStorage.removeItem('roles')
+  // 用 window.location 兜底: 即使 router 未初始化也能生效, 且会刷新页面状态
+  window.location.replace('/login')
+}
+
 request.interceptors.request.use(config => {
   const token = localStorage.getItem('token')
   if (token) {
@@ -42,14 +62,7 @@ request.interceptors.response.use(
     }
 
     if (res.code === RESULT_CODE.UNAUTHORIZED || res.code === RESULT_CODE.FORBIDDEN) {
-      if (!isRedirectingLogin) {
-        isRedirectingLogin = true
-        ElMessage.error(res.msg || '登录已过期，请重新登录')
-        // 注意: 此处不要删除 localStorage 的 token。
-        // 否则并发请求中先到的 401 会清掉 token, 导致紧随其后的其他请求(如页面 onMounted 拉数据)
-        // 因读不到 token 而级联 401。登录态交由路由守卫统一判定。
-        router.replace('/login').finally(() => { isRedirectingLogin = false })
-      }
+      forceToLogin(res.msg)
       return Promise.reject(new Error(res.msg || '未授权'))
     }
 
@@ -65,12 +78,7 @@ request.interceptors.response.use(
     const status = error.response && error.response.status
     const serverMsg = error.response && error.response.data && error.response.data.msg
     if (status === 401 || status === 403) {
-      if (!isRedirectingLogin) {
-        isRedirectingLogin = true
-        ElMessage.error(serverMsg || '登录已过期，请重新登录')
-        // 同上: 不删除 token, 避免并发请求级联 401
-        router.replace('/login').finally(() => { isRedirectingLogin = false })
-      }
+      forceToLogin(serverMsg)
     } else {
       ElMessage.error(serverMsg || error.message || '网络错误，请稍后重试')
     }

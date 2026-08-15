@@ -27,7 +27,7 @@
           <span class="tree-node">
             <span class="node-label">
               {{ data.name }}
-              <el-tag size="small" :type="orgTypeMeta[data.orgType]?.tag || 'info'" effect="plain" class="type-tag">{{ orgTypeMeta[data.orgType]?.label || '组织' }}</el-tag>
+              <el-tag size="small" type="info" effect="plain" class="type-tag">{{ data.orgTypeName || orgTypeLabel(data.orgType) }}</el-tag>
               <el-tag size="small" type="info" effect="plain" class="code-tag">{{ data.code }}</el-tag>
               <el-tag v-if="data.enabled !== 1" size="small" type="danger" effect="plain">禁用</el-tag>
             </span>
@@ -47,7 +47,7 @@
       <ul v-if="showDevices && flatDevices.length" class="device-list">
         <li v-for="d in flatDevices" :key="d.id">
           {{ d.name }}
-          <el-tag size="small" :type="deviceTypeMeta[d.deviceType]?.tag || 'success'" effect="plain" class="type-tag">{{ deviceTypeMeta[d.deviceType]?.label || '设备' }}</el-tag>
+          <el-tag size="small" type="success" effect="plain" class="type-tag">{{ d.deviceTypeName || deviceTypeLabel(d.deviceType) }}</el-tag>
           <span class="code-tag">{{ d.code }}</span>
         </li>
       </ul>
@@ -76,7 +76,7 @@
         </el-form-item>
         <el-form-item label="组织类型" required>
           <el-select v-model="form.orgType" placeholder="请选择类型" style="width:100%">
-            <el-option v-for="(m, k) in orgTypeMeta" :key="k" :label="m.label" :value="Number(k)" />
+            <el-option v-for="o in orgTypeOptions" :key="o.value" :label="o.label" :value="Number(o.value)" />
           </el-select>
         </el-form-item>
         <el-form-item label="是否启用">
@@ -96,7 +96,7 @@ import { ref, onMounted, computed } from 'vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { Plus, Edit, Delete, InfoFilled } from '@element-plus/icons-vue'
 import {
-  getOrgTree, getOrgTreeWithDevices, saveOrg, deleteOrg, moveOrg
+  getOrgTree, getOrgTreeWithDevices, saveOrg, deleteOrg, moveOrg, getDictByType
 } from '../../api/index.js'
 
 const treeRef = ref()
@@ -109,18 +109,25 @@ const dialog = ref(false)
 const form = ref({ id: null, code: '', name: '', parentId: 0, orgType: 1, enabled: 1 })
 const enabledSwitch = ref(true)
 
-// 组织类型 / 设备类型 元数据
-const orgTypeMeta = {
-  1: { label: '工厂', tag: 'danger' },
-  2: { label: '车间', tag: 'warning' },
-  3: { label: '产线', tag: 'success' },
-  4: { label: '部门', tag: 'info' }
-}
-const deviceTypeMeta = {
-  1: { label: '设备', tag: 'success' },
-  2: { label: '机床', tag: 'warning' },
-  3: { label: '产线', tag: 'primary' },
-  4: { label: '工位', tag: 'info' }
+// 类型选项来自字典(可在「系统管理-字典管理」配置)
+const orgTypeOptions = ref([])
+const deviceTypeOptions = ref([])
+const orgTypeMap = ref({})
+const deviceTypeMap = ref({})
+function orgTypeLabel(v) { return orgTypeMap.value[v] || ('类型' + v) }
+function deviceTypeLabel(v) { return deviceTypeMap.value[v] || ('类型' + v) }
+
+async function loadDictOptions() {
+  try {
+    const org = await getDictByType('mes_org_type')
+    orgTypeOptions.value = org || []
+    orgTypeMap.value = Object.fromEntries((org || []).map(o => [o.value, o.label]))
+  } catch (e) { /* 字典不可用时退化为 value */ }
+  try {
+    const dev = await getDictByType('mes_device_type')
+    deviceTypeOptions.value = dev || []
+    deviceTypeMap.value = Object.fromEntries((dev || []).map(o => [o.value, o.label]))
+  } catch (e) { /* 字典不可用时退化为 value */ }
 }
 
 // 把挂载设备拍平展示
@@ -201,7 +208,7 @@ async function onNodeDrop(draggingNode, dropNode, dropType) {
   }
 }
 
-onMounted(load)
+onMounted(async () => { await loadDictOptions(); await load() })
 </script>
 
 <style scoped>
