@@ -55,6 +55,7 @@ const componentMap = {
   'blog/tag': () => import('../views/blog/TagManage.vue'),
   'blog/image': () => import('../views/blog/ImageManage.vue'),
   'blog/comment': () => import('../views/blog/CommentManage.vue'),
+  'blog/site-config': () => import('../views/blog/SiteConfigManage.vue'),
   'mes/area': () => import('../views/mes/AreaManage.vue'),
   'mes/org': () => import('../views/mes/OrgManage.vue'),
   'mes/device': () => import('../views/mes/DeviceManage.vue'),

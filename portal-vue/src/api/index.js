@@ -82,6 +82,12 @@ export const saveComment = (data) => request.post(`${BLOG}/comment`, data)
 export const updateCommentStatus = (id, status) => request.put(`${BLOG}/comment/` + id + '/status?status=' + status)
 export const deleteComment = (id) => request.delete(`${BLOG}/comment/` + id)
 
+// ===================== 博客前台站点配置 (portal-blog) =====================
+// 公开接口：前台未登录也可拉取（网关白名单已放行 /blogs/blog/site-config/public/**）
+export const getSiteConfig = () => request.get(`${BLOG}/site-config/public`)
+// 保存配置（后台管理员，需登录）
+export const saveSiteConfig = (data) => request.post(`${BLOG}/site-config`, data)
+
 // ===================== 文件模块 (portal-file) =====================
 export const getImagePage = (params) => request.get(`${FILE}/image/page`, { params })
 export const uploadImage = (file) => {

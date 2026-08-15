@@ -1,7 +1,10 @@
 <template>
   <el-container class="layout">
     <el-aside :width="isCollapse ? '64px' : '220px'" class="aside">
-      <div class="logo">{{ isCollapse ? '门' : '门户网站' }}</div>
+      <div class="logo">
+        <CatLogo v-if="isCollapse" :size="34" />
+        <span v-else class="logo-full"><CatLogo :size="28" /> 甜心门户</span>
+      </div>
         <el-menu :default-active="activeMenu" :collapse="isCollapse" class="menu" background-color="transparent"
                text-color="rgba(255,255,255,0.75)" active-text-color="#fff" @select="onMenuSelect">
           <template v-for="m in menus" :key="m.id">
@@ -39,6 +42,7 @@
               <el-dropdown-menu>
                 <el-dropdown-item command="theme-bili" :class="{ active: theme === 'theme-bili' }">bilibili 粉</el-dropdown-item>
                 <el-dropdown-item command="theme-tdesign" :class="{ active: theme === 'theme-tdesign' }">TDesign 蓝</el-dropdown-item>
+                <el-dropdown-item command="theme-melody" :class="{ active: theme === 'theme-melody' }">甜心猫 少女粉</el-dropdown-item>
               </el-dropdown-menu>
             </template>
           </el-dropdown>
@@ -74,6 +78,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { Fold, Expand, Brush, ArrowDown, SwitchButton, DataLine, Setting, User, UserFilled, Menu, Notebook, Document, EditPen, Collection, PriceTag, Picture, ChatDotRound, Link, View, MapLocation, OfficeBuilding, Cpu } from '@element-plus/icons-vue'
 import { ElMessage, ElMessageBox } from 'element-plus'
 import { useUserStore } from '../stores/user'
+import CatLogo from '../components/CatLogo.vue'
 
 const iconMap = {
   dashboard: DataLine,
@@ -173,7 +178,8 @@ function findMenuByPath(list, path) {
 <style scoped>
 .layout { height: 100%; }
 .aside { background: var(--aside-bg); transition: width 0.3s, background 0.3s; }
-.logo { color: #fff; font-size: 18px; font-weight: bold; text-align: center; line-height: 60px; overflow: hidden; white-space: nowrap; }
+.logo { color: #fff; font-size: 18px; font-weight: bold; text-align: center; line-height: 60px; overflow: hidden; white-space: nowrap; display: flex; align-items: center; justify-content: center; }
+.logo-full { display: inline-flex; align-items: center; gap: 8px; }
 .menu { border-right: none; }
 .menu :deep(.el-menu-item.is-active) { background: var(--brand) !important; border-radius: 0 8px 8px 0; margin: 4px 8px; width: auto; }
 .menu :deep(.el-menu-item), .menu :deep(.el-sub-menu__title) { border-radius: 0 8px 8px 0; margin: 4px 8px; width: auto; }

@@ -14,7 +14,7 @@ spring:
         file-extension: yml
 
 server:
-  port: 8220
+  port: 8221
 
 ---
 spring:

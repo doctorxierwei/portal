@@ -48,7 +48,8 @@ public class AuthGlobalFilter implements GlobalFilter, Ordered {
             "/files/image/file/**",
             "/files/image/minio/**",
             "/blogs/blog/article/public/**",
-            "/blogs/blog/comment/public/**"
+            "/blogs/blog/comment/public/**",
+            "/blogs/blog/site-config/public/**"
     );
 
     public AuthGlobalFilter(JwtProperties jwtProperties) {

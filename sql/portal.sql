@@ -497,3 +497,30 @@ DROP PROCEDURE IF EXISTS add_index_if_not_exists;
 -- UPDATE blog_article SET cover = REPLACE(cover, @OLD_MINIO, @NEW_MINIO)   WHERE cover  LIKE CONCAT('%', @OLD_MINIO, '%');
 -- UPDATE blog_image   SET url   = REPLACE(url,   @OLD_MINIO, @NEW_MINIO)   WHERE url    LIKE CONCAT('%', @OLD_MINIO, '%');
 -- =====================================================================
+
+-- =====================================================================
+-- 9. 博客前台站点配置（单行制 id=1）：名称 / 副标题 / 顶栏背景+透明度 / 页面背景 / 页脚
+-- =====================================================================
+DROP TABLE IF EXISTS blog_site_config;
+CREATE TABLE blog_site_config (
+  id             BIGINT        PRIMARY KEY AUTO_INCREMENT,
+  site_name      VARCHAR(64)   DEFAULT '我的博客',
+  slogan         VARCHAR(128)  DEFAULT '',
+  header_bg      VARCHAR(256)  DEFAULT '#ffffff',
+  header_opacity DECIMAL(3,2)  DEFAULT 1.00,
+  page_bg_type   VARCHAR(16)   DEFAULT 'color',
+  page_bg        VARCHAR(512)  DEFAULT '#f5f6f7',
+  page_opacity   DECIMAL(3,2)  DEFAULT 1.00,
+  footer_text    VARCHAR(256)  DEFAULT '© 我的博客',
+  update_time    DATETIME      DEFAULT NULL
+) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+
+INSERT INTO blog_site_config (id, site_name, slogan, header_bg, header_opacity, page_bg_type, page_bg, page_opacity, footer_text)
+VALUES (1, '我的博客', '', '#ffffff', 1.00, 'color', '#f5f6f7', 1.00, '© 我的博客')
+ON DUPLICATE KEY UPDATE id = id;
+
+-- 「站点设置」菜单（归入「博客管理」目录下）
+SET @blog_pid = (SELECT id FROM sys_menu WHERE path = '/blog' AND type = 0 LIMIT 1);
+INSERT INTO sys_menu (parent_id, name, path, component, icon, sort, type, permission)
+SELECT * FROM (SELECT @blog_pid, '站点设置', '/blog/site-config', 'blog/site-config', 'setting', 8, 1, 'blog:siteconfig:view') t
+WHERE NOT EXISTS (SELECT 1 FROM sys_menu WHERE path = '/blog/site-config' AND type = 1);
